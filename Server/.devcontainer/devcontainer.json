@@ -1,0 +1,34 @@
+{
+  "name": "GameServer Dev",
+
+  // 프로덕션 docker-compose.yml 과 완전히 분리된 개발 전용 compose 사용
+  "dockerComposeFile": "docker-compose.devcontainer.yml",
+  "service": "devserver",
+  "workspaceFolder": "/workspaces/Server",
+  "remoteUser": "vscode",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.csdevkit",
+        "ms-dotnettools.vscode-dotnet-runtime",
+        "formulahendry.dotnet-test-explorer",
+        "ms-azuretools.vscode-docker",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "dotnet.defaultSolution": "GameServer.sln"
+      }
+    }
+  },
+
+  // 컨테이너 생성 후 NuGet restore + dotnet-ef 툴 설치
+  "postCreateCommand": "sudo rm -rf src/GameServer/obj src/GameServer/bin && dotnet restore src/GameServer/GameServer.csproj && dotnet tool install --global dotnet-ef",
+
+  "forwardPorts": [7000],
+  "portsAttributes": {
+    "7000": { "label": "GameServer TCP", "onAutoForward": "silent" }
+  }
+}

@@ -1,0 +1,74 @@
+version: "3.9"
+
+# 개발 전용 compose — 프로덕션 docker-compose.yml 과 완전히 독립
+# devcontainer가 이 파일만 사용하므로 gameserver build 섹션이 없어 빌드 에러 없음
+
+services:
+
+  # ── 개발 서버 (빌드 없이 SDK 이미지 + 소스 마운트) ─────────────────────────
+  devserver:
+    image: mcr.microsoft.com/devcontainers/dotnet:8.0
+    volumes:
+      # 프로젝트 루트를 /workspaces/Server 에 마운트
+      - ..:/workspaces/Server:cached
+      # NuGet 캐시: /home/vscode 밖에 마운트해야 소유권 충돌 없음
+      - nuget-cache:/nuget-packages
+    working_dir: /workspaces/Server
+    command: sleep infinity   # devcontainer가 종료되지 않도록 유지
+    environment:
+      - NUGET_PACKAGES=/nuget-packages
+      - ConnectionStrings__MySqlConnection=Server=dev-mysql;Port=3306;Database=gamedb;User Id=gameuser;Password=gamepassword;CharSet=utf8mb4;
+      - ConnectionStrings__Redis=dev-redis:6379
+      - DOTNET_WATCH_RESTART_ON_RUDE_EDIT=true
+    depends_on:
+      dev-mysql:
+        condition: service_healthy
+      dev-redis:
+        condition: service_healthy
+    networks:
+      - devnet
+
+  # ── MySQL 8 (개발용) ──────────────────────────────────────────────────────────
+  dev-mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: gamedb
+      MYSQL_USER: gameuser
+      MYSQL_PASSWORD: gamepassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - dev-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "gameuser", "--password=gamepassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - devnet
+
+  # ── Redis 7 (개발용) ──────────────────────────────────────────────────────────
+  dev-redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - dev-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - devnet
+
+volumes:
+  nuget-cache:
+  dev-mysql-data:
+  dev-redis-data:
+
+networks:
+  devnet:
+    driver: bridge

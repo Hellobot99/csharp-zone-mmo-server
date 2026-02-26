@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+
+  # ── Game Server ──────────────────────────────────────────────────────────────
+  gameserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gameserver:latest
+    container_name: gameserver
+    ports:
+      - "7000:7000"
+    environment:
+      # Override appsettings.json values at runtime.
+      # Format: Section__Key (double underscore = colon separator in .NET config)
+      - ConnectionStrings__MySqlConnection=Server=mysql;Port=3306;Database=gamedb;User Id=gameuser;Password=gamepassword;CharSet=utf8mb4;
+      - ConnectionStrings__Redis=redis:6379
+      - Server__Port=7000
+      - Logging__LogLevel__Default=Information
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - game-net
+
+  # ── MySQL 8 ──────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: gamedb
+      MYSQL_USER: gameuser
+      MYSQL_PASSWORD: gamepassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "gameuser", "--password=gamepassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - game-net
+
+  # ── Redis 7 ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - game-net
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  game-net:
+    driver: bridge
