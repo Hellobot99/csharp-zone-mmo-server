@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Azure Container Instances – Game Server Deployment
+# Azure VM – Game Server Deployment (docker-compose)
 #
 # Prerequisites:
 #   - Azure CLI installed and logged in  (az login)
-#   - Docker installed (for local build + push)
+#   - SSH key pair at ~/.ssh/id_rsa (or change SSH_KEY_PATH below)
 #
 # Usage:
 #   chmod +x deploy.sh
@@ -14,68 +14,73 @@ set -euo pipefail
 
 # ── Variables (edit before running) ──────────────────────────────────────────
 RESOURCE_GROUP="game-server-rg"
-LOCATION="koreacentral"           # e.g. eastus / koreacentral / japaneast
-ACR_NAME="gameserveracr"          # must be globally unique, lowercase, 5-50 chars
-ACI_NAME="gameserver-aci"
-IMAGE_NAME="gameserver"
-IMAGE_TAG="latest"
-
-# External services – replace with your Azure Database for MySQL / Azure Cache for Redis endpoints
-MYSQL_CONN="Server=<your-mysql>.mysql.database.azure.com;Port=3306;Database=gamedb;User Id=gameuser;Password=gamepassword;SslMode=Required;"
-REDIS_CONN="<your-redis>.redis.cache.windows.net:6380,password=<access-key>,ssl=True,abortConnect=False"
+LOCATION="koreacentral"
+VM_NAME="gameserver-vm"
+VM_SIZE="Standard_B2s"          # 2 vCPU, 4 GB RAM
+ADMIN_USER="azureuser"
+SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
+REPO_URL="https://github.com/Hellobot99/Project_charp_mmo.git"   # ← 레포 URL 입력
+REPO_BRANCH="main"
 
 # ── 1. Resource Group ─────────────────────────────────────────────────────────
 echo ">>> Creating resource group: $RESOURCE_GROUP"
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
-# ── 2. Azure Container Registry ───────────────────────────────────────────────
-echo ">>> Creating ACR: $ACR_NAME"
-az acr create \
+# ── 2. Create VM ──────────────────────────────────────────────────────────────
+echo ">>> Creating VM: $VM_NAME ($VM_SIZE)"
+az vm create \
   --resource-group "$RESOURCE_GROUP" \
-  --name "$ACR_NAME" \
-  --sku Basic \
-  --admin-enabled true
+  --name "$VM_NAME" \
+  --image Ubuntu2204 \
+  --size "$VM_SIZE" \
+  --admin-username "$ADMIN_USER" \
+  --ssh-key-values "$SSH_KEY_PATH" \
+  --public-ip-sku Standard \
+  --output table
 
-# ── 3. Build & push image via ACR Tasks (no local Docker needed) ──────────────
-echo ">>> Building image in ACR..."
-az acr build \
-  --registry "$ACR_NAME" \
-  --image "$IMAGE_NAME:$IMAGE_TAG" \
-  ..   # repo root (where Dockerfile lives)
-
-# ── 4. Get ACR credentials ────────────────────────────────────────────────────
-ACR_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)
-ACR_USER=$(az acr credential show --name "$ACR_NAME" --query username --output tsv)
-ACR_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" --output tsv)
-
-# ── 5. Deploy to Azure Container Instances ────────────────────────────────────
-echo ">>> Deploying ACI: $ACI_NAME"
-az container create \
+# ── 3. Open port 7000 (TCP) ───────────────────────────────────────────────────
+echo ">>> Opening port 7000"
+az vm open-port \
   --resource-group "$RESOURCE_GROUP" \
-  --name "$ACI_NAME" \
-  --image "$ACR_SERVER/$IMAGE_NAME:$IMAGE_TAG" \
-  --registry-login-server "$ACR_SERVER" \
-  --registry-username "$ACR_USER" \
-  --registry-password "$ACR_PASS" \
-  --os-type Linux \
-  --cpu 1 \
-  --memory 1.5 \
-  --ports 7000 \
-  --protocol TCP \
-  --restart-policy Always \
-  --environment-variables \
-    "ConnectionStrings__MySqlConnection=$MYSQL_CONN" \
-    "ConnectionStrings__Redis=$REDIS_CONN" \
-    "Server__Port=7000" \
-    "Logging__LogLevel__Default=Information"
+  --name "$VM_NAME" \
+  --port 7000
 
-# ── 6. Show public IP ─────────────────────────────────────────────────────────
-PUBLIC_IP=$(az container show \
+# ── 4. Get public IP ──────────────────────────────────────────────────────────
+PUBLIC_IP=$(az vm show \
   --resource-group "$RESOURCE_GROUP" \
-  --name "$ACI_NAME" \
-  --query ipAddress.ip \
+  --name "$VM_NAME" \
+  --show-details \
+  --query publicIps \
   --output tsv)
+
+echo ">>> VM IP: $PUBLIC_IP"
+
+# ── 5. Install Docker + docker-compose, clone repo, run ──────────────────────
+echo ">>> Setting up server on VM..."
+ssh -o StrictHostKeyChecking=no "$ADMIN_USER@$PUBLIC_IP" << EOF
+  set -e
+
+  # Docker 설치
+  curl -fsSL https://get.docker.com | sudo sh
+  sudo usermod -aG docker $ADMIN_USER
+
+  # docker-compose v2 설치
+  sudo apt-get install -y docker-compose-plugin
+
+  # 레포 클론
+  git clone --branch $REPO_BRANCH $REPO_URL ~/game
+  cd ~/game/Server
+
+  # 실행
+  sudo docker compose up --build -d
+
+  echo "✅  Server started"
+  sudo docker compose ps
+EOF
 
 echo ""
 echo "✅  Deployment complete!"
 echo "    Game server endpoint: $PUBLIC_IP:7000"
+echo ""
+echo "    SSH:  ssh $ADMIN_USER@$PUBLIC_IP"
+echo "    Logs: ssh $ADMIN_USER@$PUBLIC_IP 'cd ~/game/Server && sudo docker compose logs -f gameserver'"
