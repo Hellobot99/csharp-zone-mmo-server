@@ -8,5 +8,4 @@ public interface IPlayerRepository
     Task<Player?> GetByUsernameAsync(string username);
     Task<Player> CreateAsync(Player player);
     Task UpdateAsync(Player player);
-    Task DeleteAsync(int id);
 }

@@ -27,14 +27,4 @@ public sealed class PlayerRepository : IPlayerRepository
         _db.Players.Update(player);
         await _db.SaveChangesAsync();
     }
-
-    public async Task DeleteAsync(int id)
-    {
-        var player = await _db.Players.FindAsync(id);
-        if (player is not null)
-        {
-            _db.Players.Remove(player);
-            await _db.SaveChangesAsync();
-        }
-    }
 }

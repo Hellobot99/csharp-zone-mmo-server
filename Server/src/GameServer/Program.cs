@@ -1,5 +1,6 @@
 using GameServer;
 using GameServer.Cache;
+using Microsoft.Extensions.Configuration;
 using GameServer.Config;
 using GameServer.Database;
 using GameServer.Database.Repositories;

@@ -4,7 +4,7 @@
   // 프로덕션 docker-compose.yml 과 완전히 분리된 개발 전용 compose 사용
   "dockerComposeFile": "docker-compose.devcontainer.yml",
   "service": "devserver",
-  "workspaceFolder": "/workspaces/Server",
+  "workspaceFolder": "/workspaces/Project_charp_mmo/Server",
   "remoteUser": "vscode",
 
   "customizations": {
@@ -19,13 +19,23 @@
       ],
       "settings": {
         "editor.formatOnSave": true,
-        "dotnet.defaultSolution": "GameServer.sln"
+        "dotnet.defaultSolution": "GameServer.sln",
+        // C# 언어 서버가 Client(Unity) 파일을 인덱싱하지 않도록 제외
+        "files.watcherExclude": {
+          "**/Client/**": true,
+          "**/proto/**": true,
+          "**/.git/**": true
+        },
+        "files.exclude": {
+          "../Client": true,
+          "../proto": true
+        }
       }
     }
   },
 
-  // 컨테이너 생성 후 NuGet restore + dotnet-ef 툴 설치
-  "postCreateCommand": "sudo rm -rf src/GameServer/obj src/GameServer/bin && dotnet restore src/GameServer/GameServer.csproj && dotnet tool install --global dotnet-ef",
+  // 컨테이너 생성 후 protoc + NuGet restore + dotnet-ef 툴 설치
+  "postCreateCommand": "sudo chown -R vscode:vscode /nuget-packages && sudo apt-get update -qq && sudo apt-get install -y -qq protobuf-compiler make && sudo rm -rf src/GameServer/obj src/GameServer/bin && dotnet restore src/GameServer/GameServer.csproj && dotnet tool install --global dotnet-ef",
 
   "forwardPorts": [7000],
   "portsAttributes": {

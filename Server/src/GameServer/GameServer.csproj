@@ -19,6 +19,9 @@
     </PackageReference>
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.2" />
 
+    <!-- Protobuf -->
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+
     <!-- Redis -->
     <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
 

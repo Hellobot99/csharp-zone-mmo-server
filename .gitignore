@@ -25,6 +25,9 @@ Client/[Aa]ssets/AddressableAssetsData/*/*.bin*
 Client/[Aa]ssets/Unity.VisualScripting.Generated/
 Client/[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 Client/[Aa]ssets/Plugins/Editor/JetBrains*
+# Protobuf DLL (make proto-deps 로 생성)
+Client/Assets/Plugins/Google.Protobuf.dll
+Client/Assets/Plugins/Google.Protobuf.dll.meta
 
 ###################################
 # .NET Server (Server/)

@@ -21,15 +21,9 @@ public class GameDbContext : DbContext
                 .HasMaxLength(50)
                 .IsRequired();
 
-            entity.Property(e => e.PasswordHash)
+            entity.Property(e => e.Password)
                 .HasMaxLength(255)
                 .IsRequired();
-
-            entity.Property(e => e.Level)
-                .HasDefaultValue(1);
-
-            entity.Property(e => e.Experience)
-                .HasDefaultValue(0L);
 
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP(6)");

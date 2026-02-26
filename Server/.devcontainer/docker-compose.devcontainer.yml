@@ -9,11 +9,11 @@ services:
   devserver:
     image: mcr.microsoft.com/devcontainers/dotnet:8.0
     volumes:
-      # 프로젝트 루트를 /workspaces/Server 에 마운트
-      - ..:/workspaces/Server:cached
+      # 모노레포 루트 전체 마운트 (proto/ Client/ Server/ 모두 접근 가능)
+      - ../..:/workspaces/Project_charp_mmo:cached
       # NuGet 캐시: /home/vscode 밖에 마운트해야 소유권 충돌 없음
       - nuget-cache:/nuget-packages
-    working_dir: /workspaces/Server
+    working_dir: /workspaces/Project_charp_mmo/Server
     command: sleep infinity   # devcontainer가 종료되지 않도록 유지
     environment:
       - NUGET_PACKAGES=/nuget-packages
