@@ -185,13 +185,19 @@ public class BotClient
             _moveSentTimes.Enqueue(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             Send(0x0101, new MoveRequest { X = X, Y = Y, Z = 0f }.ToByteArray());
 
+            ++tick;
+
             // 5초마다 채팅 전송 (50틱 = 5초)
-            if (++tick % 50 == 0)
+            if (tick % 50 == 0)
             {
                 ChatRequestsSent++;
                 _chatSentTimes.Enqueue(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                 Send(0x0201, new ChatRequest { Message = $"ping{tick}" }.ToByteArray());
             }
+
+            // 60초마다 Ping 전송 (600틱 = 60초)
+            if (tick % 600 == 0)
+                Send(0x0011, Array.Empty<byte>()); // Ping
         }
     }
 

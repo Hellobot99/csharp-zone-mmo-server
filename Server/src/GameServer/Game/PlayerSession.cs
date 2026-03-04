@@ -11,4 +11,5 @@ public class PlayerSession
     public float X { get; set; }
     public float Y { get; set; }
     public bool IsObserver { get; set; }
+    public DateTime LastPingAt { get; set; } = DateTime.UtcNow;
 }

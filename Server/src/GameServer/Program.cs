@@ -56,6 +56,7 @@ builder.Services.AddScoped<RegisterPacketHandler>();
 builder.Services.AddScoped<RequestSnapshotHandler>();
 builder.Services.AddScoped<ZoneTransferHandler>();
 builder.Services.AddScoped<EnterGameHandler>();
+builder.Services.AddScoped<PingPacketHandler>();
 
 builder.Services.AddSingleton<PacketHandlerManager>(sp =>
 {
@@ -67,6 +68,7 @@ builder.Services.AddSingleton<PacketHandlerManager>(sp =>
     manager.Register<RequestSnapshotHandler>((ushort)PacketType.RequestSnapshot);
     manager.Register<ZoneTransferHandler>((ushort)PacketType.ZoneTransferRequest);
     manager.Register<EnterGameHandler>((ushort)PacketType.EnterGame);
+    manager.Register<PingPacketHandler>((ushort)PacketType.Ping);
 
     return manager;
 });
@@ -74,6 +76,7 @@ builder.Services.AddSingleton<PacketHandlerManager>(sp =>
 // ── Network ────────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<TcpServer>();
 builder.Services.AddHostedService<GameServerHostedService>();
+builder.Services.AddHostedService<HeartbeatService>();
 
 // ── Build & Run ────────────────────────────────────────────────────────────────
 var host = builder.Build();

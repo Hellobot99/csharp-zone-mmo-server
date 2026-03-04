@@ -938,7 +938,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ed9fbc3a01e8d844ba152c11296ab77, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkManager
-  host: 127.0.0.1
+  host: 4.230.20.98
   port: 7000
 --- !u!4 &1070340246
 Transform:
