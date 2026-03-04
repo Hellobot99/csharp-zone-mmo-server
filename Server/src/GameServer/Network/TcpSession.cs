@@ -99,7 +99,7 @@ public sealed class TcpSession : IClientSession
         // Guard against assembly-buffer overflow
         if (_assemblyPos + e.BytesTransferred > AssemblyBufferSize)
         {
-            _logger.LogWarning("[{Id}] Assembly buffer overflow – closing session.", SessionId);
+            _logger.LogWarning("[{Id}] Assembly buffer overflow closing session.", SessionId);
             Close();
             return;
         }
@@ -151,7 +151,7 @@ public sealed class TcpSession : IClientSession
         if (PacketReceived is null) return;
         _ = Task.Run(async () =>
         {
-            try   { await PacketReceived(this, packetType, body); }
+            try { await PacketReceived(this, packetType, body); }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[{Id}] Unhandled exception in packet handler (type=0x{Type:X4}).",

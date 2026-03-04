@@ -1,5 +1,6 @@
 using GameServer;
 using GameServer.Cache;
+using GameServer.Game;
 using Microsoft.Extensions.Configuration;
 using GameServer.Config;
 using GameServer.Database;
@@ -43,13 +44,30 @@ builder.Services.AddSingleton<IRedisService, RedisService>();
 // ── Repositories ───────────────────────────────────────────────────────────────
 builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
 
+// ── Game ───────────────────────────────────────────────────────────────────────
+builder.Services.AddSingleton<SessionManager>();
+builder.Services.AddSingleton<ZoneManager>();
+
 // ── Packet Handlers ────────────────────────────────────────────────────────────
 builder.Services.AddScoped<LoginPacketHandler>();
+builder.Services.AddScoped<MovePacketHandler>();
+builder.Services.AddScoped<ChatPacketHandler>();
+builder.Services.AddScoped<RegisterPacketHandler>();
+builder.Services.AddScoped<RequestSnapshotHandler>();
+builder.Services.AddScoped<ZoneTransferHandler>();
+builder.Services.AddScoped<EnterGameHandler>();
 
 builder.Services.AddSingleton<PacketHandlerManager>(sp =>
 {
     var manager = new PacketHandlerManager(sp, sp.GetRequiredService<ILogger<PacketHandlerManager>>());
     manager.Register<LoginPacketHandler>((ushort)PacketType.LoginRequest);
+    manager.Register<MovePacketHandler>((ushort)PacketType.MoveRequest);
+    manager.Register<ChatPacketHandler>((ushort)PacketType.ChatRequest);
+    manager.Register<RegisterPacketHandler>((ushort)PacketType.RegisterRequest);
+    manager.Register<RequestSnapshotHandler>((ushort)PacketType.RequestSnapshot);
+    manager.Register<ZoneTransferHandler>((ushort)PacketType.ZoneTransferRequest);
+    manager.Register<EnterGameHandler>((ushort)PacketType.EnterGame);
+
     return manager;
 });
 

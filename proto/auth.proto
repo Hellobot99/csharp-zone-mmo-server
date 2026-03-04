@@ -2,7 +2,7 @@ syntax = "proto3";
 
 option csharp_namespace = "GameProto";
 
-// ── Auth (PacketType 0x0001 / 0x0002) ────────────────────────────────────────
+// ── Auth (PacketType 0x0001 / 0x0002 / 0x0003 / 0x0004) ────────────────────────────────────────
 
 message LoginRequest {
   string username = 1;
@@ -14,3 +14,15 @@ message LoginResponse {
   int32  player_id = 2;
   string token     = 3;  // session token on success, error message on failure
 }
+
+message RegisterRequest {
+  string username = 1;
+  string password = 2;  // SHA-256 hash
+}
+
+message RegisterResponse {
+  bool   success   = 1;
+  int32  player_id = 2;
+  string token     = 3;  // session token on success, error message on failure
+}
+

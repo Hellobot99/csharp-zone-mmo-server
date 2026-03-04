@@ -30,6 +30,12 @@ Client/Assets/Plugins/Google.Protobuf.dll
 Client/Assets/Plugins/Google.Protobuf.dll.meta
 
 ###################################
+# ParrelSync clones
+###################################
+Client/Library/
+*_clone_*/
+
+###################################
 # .NET Server (Server/)
 ###################################
 Server/**/bin/

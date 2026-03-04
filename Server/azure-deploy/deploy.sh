@@ -16,7 +16,7 @@ set -euo pipefail
 RESOURCE_GROUP="game-server-rg"
 LOCATION="koreacentral"
 VM_NAME="gameserver-vm"
-VM_SIZE="Standard_B2s"          # 2 vCPU, 4 GB RAM
+VM_SIZE="Standard_D2s_v5"       # 2 vCPU, 8 GB RAM
 ADMIN_USER="azureuser"
 SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 REPO_URL="https://github.com/Hellobot99/Project_charp_mmo.git"   # ← 레포 URL 입력

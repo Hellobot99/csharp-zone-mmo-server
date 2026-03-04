@@ -33,3 +33,34 @@ message ChatBroadcast {
   string username  = 2;
   string message   = 3;
 }
+
+
+// ── PlayerEnter/Leave ────────────────────────────────────────
+
+
+message PlayerEnter {
+  int32  player_id = 1;
+  string username  = 2;
+  float  x         = 3;
+  float  y         = 4;
+}
+
+message PlayerLeave {
+  int32 player_id = 1;
+}
+
+message ZoneSnapshot {
+  repeated PlayerEnter players = 1;
+}
+
+message RequestZoneSnapshot {
+}
+
+message ZoneTransferRequest { int32 target_zone_id = 1; }
+
+message ZoneTransferResponse {
+    bool success = 1;
+    int32 zone_id = 2;
+    float spawn_x = 3;
+    float spawn_y = 4;
+}

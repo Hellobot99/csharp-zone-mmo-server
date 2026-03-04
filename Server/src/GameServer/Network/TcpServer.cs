@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
+using GameProto;
 using GameServer.Config;
+using GameServer.Game;
+using GameServer.Packets;
 using GameServer.Packets.Handlers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -28,6 +31,8 @@ public sealed class TcpServer
     private readonly BufferManager _bufferManager;
     private readonly SAEAPool _receivePool;
     private readonly SemaphoreSlim _connectionThrottle;
+    private readonly SessionManager _sessions;
+    private readonly ZoneManager _zones;
 
     private Socket? _listenSocket;
     private int _connectionCount;
@@ -35,11 +40,15 @@ public sealed class TcpServer
     public TcpServer(
         PacketHandlerManager packetHandlerManager,
         IOptions<ServerConfig> config,
-        ILogger<TcpServer> logger)
+        ILogger<TcpServer> logger,
+        SessionManager sessions,
+        ZoneManager zones)
     {
         _packetHandlerManager = packetHandlerManager;
         _config = config.Value;
         _logger = logger;
+        _sessions = sessions;
+        _zones = zones;
 
         _connectionThrottle = new SemaphoreSlim(_config.MaxConnections, _config.MaxConnections);
         _bufferManager = new BufferManager(_config.MaxConnections * _config.BufferSize, _config.BufferSize);
@@ -143,7 +152,16 @@ public sealed class TcpServer
 
     private void OnSessionDisconnected(TcpSession session)
     {
-        // Return the receive SAEA to the pool so it can be reused
+        var ps = _sessions.Get(session.SessionId);
+        if (ps is not null)
+        {
+            _zones.GetOrCreate(ps.ZoneId).Broadcast(PacketType.PlayerLeave,
+                new PlayerLeave { PlayerId = ps.PlayerId },
+                excludePlayerId: ps.PlayerId);
+            _zones.Leave(ps);
+        }
+        _sessions.Remove(session.SessionId);
+
         _receivePool.Push(session.ReceiveSAEA);
         _connectionThrottle.Release();
 
