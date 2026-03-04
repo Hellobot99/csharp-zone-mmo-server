@@ -17,6 +17,9 @@ public class ChatUI : MonoBehaviour
 
     private void Start()
     {
+        chatPanel.SetActive(false);
+        if (toggleButtonText != null) toggleButtonText.text = "Chat ▲";
+
         toggleButton.onClick.AddListener(ToggleChat);
         sendButton.onClick.AddListener(OnSendClicked);
         messageInput.onSubmit.AddListener(_ => OnSendClicked());

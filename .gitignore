@@ -30,6 +30,12 @@ Client/Assets/Plugins/Google.Protobuf.dll
 Client/Assets/Plugins/Google.Protobuf.dll.meta
 
 ###################################
+# Unity Build outputs (Client_build/)
+###################################
+Client_build/*_BurstDebugInformation_DoNotShip/
+Client_build/*_BackUpThisFolder_ButDontShipItWithYourGame/
+
+###################################
 # ParrelSync clones
 ###################################
 Client/Library/
