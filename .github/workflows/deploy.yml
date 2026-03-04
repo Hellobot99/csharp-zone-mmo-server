@@ -1,0 +1,29 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Server/**"
+      - "proto/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/game
+            git pull origin main
+
+            cd Server
+            # gameserver만 재빌드/재시작 (MySQL·Redis 데이터 유지)
+            sudo docker compose up --build -d gameserver
+
+            echo "=== Running containers ==="
+            sudo docker compose ps
