@@ -91,3 +91,5 @@ Server/**/*.user
 
 # Mono
 mono_crash.*
+
+Server/docs/
