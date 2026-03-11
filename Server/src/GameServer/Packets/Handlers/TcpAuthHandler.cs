@@ -68,6 +68,7 @@ public sealed class TcpAuthHandler : IPacketHandler
         }
 
         var ps = _sessions.Add(session, playerId, username);
+        ps.IsObserver = username.StartsWith('~');
         ps.X = 0f;
         ps.Y = 600f;
         _zones.Enter(ps, zoneId: 1);

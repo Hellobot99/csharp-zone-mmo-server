@@ -34,7 +34,10 @@ public sealed class AuthService : IAuthService
     public async Task<(bool Success, string? Token, int PlayerId, string Username, string? Error)> LoginAsync(string username, string password)
     {
         var player = await _players.GetByUsernameAsync(username);
-        if (player is null || !BCrypt.Net.BCrypt.Verify(password, player.Password))
+        bool passwordValid = false;
+        try { passwordValid = player is not null && BCrypt.Net.BCrypt.Verify(password, player.Password); }
+        catch { /* invalid hash format (legacy data) */ }
+        if (!passwordValid)
             return (false, null, 0, string.Empty, "Invalid credentials");
 
         player.LastLoginAt = DateTime.UtcNow;
