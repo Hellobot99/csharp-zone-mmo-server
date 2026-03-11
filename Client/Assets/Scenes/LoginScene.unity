@@ -940,6 +940,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NetworkManager
   host: 4.230.20.98
   port: 7000
+  apiPort: 8080
 --- !u!4 &1070340246
 Transform:
   m_ObjectHideFlags: 0

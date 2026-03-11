@@ -10,7 +10,8 @@ services:
     image: gameserver:latest
     container_name: gameserver
     ports:
-      - "7000:7000"
+      - "7000:7000"   # TCP game server
+      - "8080:8080"   # HTTP API
     environment:
       # Override appsettings.json values at runtime.
       # Format: Section__Key (double underscore = colon separator in .NET config)

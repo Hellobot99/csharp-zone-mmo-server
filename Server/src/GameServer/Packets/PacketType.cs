@@ -7,11 +7,11 @@ namespace GameServer.Packets;
 /// </summary>
 public enum PacketType : ushort
 {
-    // ── Auth ──────────────────────────────────────────────────────────────────
-    LoginRequest = 0x0001,
-    LoginResponse = 0x0002,
-    RegisterRequest = 0x0003,
-    RegisterResponse = 0x0004,
+    // ── Auth (TCP) ────────────────────────────────────────────────────────────
+    // Login/Register are now handled by HTTP API (POST /api/auth/login, /register).
+    // After receiving a JWT from the API, the client connects via TCP and sends TcpAuthRequest.
+    TcpAuthRequest = 0x0001,
+    TcpAuthResponse = 0x0002,
 
     // ── Heartbeat ─────────────────────────────────────────────────────────────
     Ping = 0x0011,

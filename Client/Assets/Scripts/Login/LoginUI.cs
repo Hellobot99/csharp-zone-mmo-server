@@ -15,16 +15,11 @@ public class LoginUI : MonoBehaviour
 
     private void Awake()
     {
-        _loginHandler = GetComponent<LoginHandler>();
+        _loginHandler    = GetComponent<LoginHandler>();
         _registerHandler = GetComponent<RegisterHandler>();
         errorText.gameObject.SetActive(false);
         loginButton.onClick.AddListener(OnLoginButtonClicked);
         registerButton.onClick.AddListener(OnRegisterButtonClicked);
-    }
-
-    private void Start()
-    {
-        NetworkManager.Instance.Connect();
     }
 
     private void OnLoginButtonClicked()
@@ -39,7 +34,7 @@ public class LoginUI : MonoBehaviour
         }
 
         errorText.gameObject.SetActive(false);
-        _loginHandler.SendLoginRequest(username, password);
+        StartCoroutine(_loginHandler.LoginAsync(username, password));
     }
 
     private void OnRegisterButtonClicked()
@@ -54,7 +49,7 @@ public class LoginUI : MonoBehaviour
         }
 
         errorText.gameObject.SetActive(false);
-        _registerHandler.SendRegisterRequest(username, password);
+        StartCoroutine(_registerHandler.RegisterAsync(username, password));
     }
 
     public void ShowError(string message)

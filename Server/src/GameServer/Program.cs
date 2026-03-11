@@ -1,36 +1,32 @@
+using System.Text;
 using GameServer;
+using GameServer.Api.Services;
 using GameServer.Cache;
-using GameServer.Game;
-using Microsoft.Extensions.Configuration;
 using GameServer.Config;
 using GameServer.Database;
 using GameServer.Database.Repositories;
+using GameServer.Game;
 using GameServer.Network;
 using GameServer.Packets;
 using GameServer.Packets.Handlers;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 // ── Configuration ──────────────────────────────────────────────────────────────
 builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-builder.Configuration.AddEnvironmentVariables(); // env vars override appsettings (Docker / ACI)
-
-// ── Logging ────────────────────────────────────────────────────────────────────
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
+builder.Configuration.AddEnvironmentVariables();
 
 // ── Server Config ──────────────────────────────────────────────────────────────
 builder.Services.Configure<ServerConfig>(builder.Configuration.GetSection(ServerConfig.Section));
+builder.Services.Configure<JwtConfig>(builder.Configuration.GetSection(JwtConfig.Section));
 
 // ── Database (MySQL via EF Core) ───────────────────────────────────────────────
 var mysqlConnStr = builder.Configuration.GetConnectionString("MySqlConnection")
     ?? throw new InvalidOperationException("MySqlConnection not configured.");
-// MySQL 8.0 고정 버전 사용 (AutoDetect는 빌드/시작 시 실제 DB 접속을 시도해서 불안정)
 builder.Services.AddDbContext<GameDbContext>(options =>
     options.UseMySql(mysqlConnStr, new MySqlServerVersion(new Version(8, 0, 36))));
 
@@ -44,15 +40,17 @@ builder.Services.AddSingleton<IRedisService, RedisService>();
 // ── Repositories ───────────────────────────────────────────────────────────────
 builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
 
+// ── Auth Service ───────────────────────────────────────────────────────────────
+builder.Services.AddScoped<IAuthService, AuthService>();
+
 // ── Game ───────────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<SessionManager>();
 builder.Services.AddSingleton<ZoneManager>();
 
 // ── Packet Handlers ────────────────────────────────────────────────────────────
-builder.Services.AddScoped<LoginPacketHandler>();
+builder.Services.AddScoped<TcpAuthHandler>();
 builder.Services.AddScoped<MovePacketHandler>();
 builder.Services.AddScoped<ChatPacketHandler>();
-builder.Services.AddScoped<RegisterPacketHandler>();
 builder.Services.AddScoped<RequestSnapshotHandler>();
 builder.Services.AddScoped<ZoneTransferHandler>();
 builder.Services.AddScoped<EnterGameHandler>();
@@ -61,15 +59,13 @@ builder.Services.AddScoped<PingPacketHandler>();
 builder.Services.AddSingleton<PacketHandlerManager>(sp =>
 {
     var manager = new PacketHandlerManager(sp, sp.GetRequiredService<ILogger<PacketHandlerManager>>());
-    manager.Register<LoginPacketHandler>((ushort)PacketType.LoginRequest);
+    manager.Register<TcpAuthHandler>((ushort)PacketType.TcpAuthRequest);
     manager.Register<MovePacketHandler>((ushort)PacketType.MoveRequest);
     manager.Register<ChatPacketHandler>((ushort)PacketType.ChatRequest);
-    manager.Register<RegisterPacketHandler>((ushort)PacketType.RegisterRequest);
     manager.Register<RequestSnapshotHandler>((ushort)PacketType.RequestSnapshot);
     manager.Register<ZoneTransferHandler>((ushort)PacketType.ZoneTransferRequest);
     manager.Register<EnterGameHandler>((ushort)PacketType.EnterGame);
     manager.Register<PingPacketHandler>((ushort)PacketType.Ping);
-
     return manager;
 });
 
@@ -78,22 +74,49 @@ builder.Services.AddSingleton<TcpServer>();
 builder.Services.AddHostedService<GameServerHostedService>();
 builder.Services.AddHostedService<HeartbeatService>();
 
-// ── Build & Run ────────────────────────────────────────────────────────────────
-var host = builder.Build();
+// ── JWT Authentication ─────────────────────────────────────────────────────────
+var jwtSecret = builder.Configuration["Jwt:Secret"]
+    ?? throw new InvalidOperationException("Jwt:Secret not configured.");
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
-// Apply EF Core schema on startup (with retry for Docker readiness)
-var startupLogger = host.Services.GetRequiredService<ILogger<Program>>();
-using (var scope = host.Services.CreateScope())
+// ── Controllers ────────────────────────────────────────────────────────────────
+builder.Services.AddControllers();
+
+var app = builder.Build();
+
+// ── EF Core schema ─────────────────────────────────────────────────────────────
+var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<GameDbContext>();
     for (int attempts = 5; attempts > 0; attempts--)
     {
         try
         {
-            // EnsureCreated creates tables from the model without migrations.
-            // For production, replace with: await db.Database.MigrateAsync();
-            // and run: dotnet ef migrations add InitialCreate
-            await db.Database.EnsureCreatedAsync();
+            // EnsureCreated returns false when the DB already exists (e.g. created by Docker init).
+            // In that case tables might be missing, so verify and recreate if needed.
+            bool created = await db.Database.EnsureCreatedAsync();
+            if (!created)
+            {
+                try { await db.Players.AnyAsync(); }
+                catch
+                {
+                    startupLogger.LogWarning("DB exists but schema is missing. Recreating schema...");
+                    await db.Database.EnsureDeletedAsync();
+                    await db.Database.EnsureCreatedAsync();
+                }
+            }
             startupLogger.LogInformation("Database schema ready.");
             break;
         }
@@ -106,4 +129,20 @@ using (var scope = host.Services.CreateScope())
     }
 }
 
-await host.RunAsync();
+app.UseExceptionHandler(errApp =>
+{
+    errApp.Run(async ctx =>
+    {
+        var ex = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        var log = ctx.RequestServices.GetRequiredService<ILogger<Program>>();
+        log.LogError(ex, "Unhandled exception in HTTP request");
+        ctx.Response.StatusCode = 500;
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsync($"{{\"error\":\"{ex?.Message}\"}}");
+    });
+});
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
+
+await app.RunAsync();

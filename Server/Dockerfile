@@ -17,11 +17,11 @@ RUN dotnet publish "GameServer.csproj" -c Release -o /app/publish \
     /p:UseAppHost=false --no-restore
 
 # ── Stage 3: runtime image ─────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/runtime:8.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-# TCP port exposed by the game server
 EXPOSE 7000
+EXPOSE 8080
 
 COPY --from=publish /app/publish .
 

@@ -25,5 +25,8 @@ public class SessionManager
     public PlayerSession? Get(int sessionId)
         => _sessions.TryGetValue(sessionId, out var ps) ? ps : null;
 
+    public PlayerSession? GetByPlayerId(int playerId)
+        => _sessions.Values.FirstOrDefault(ps => ps.PlayerId == playerId);
+
     public IEnumerable<PlayerSession> GetAll() => _sessions.Values;
 }

@@ -2,27 +2,20 @@ syntax = "proto3";
 
 option csharp_namespace = "GameProto";
 
-// ── Auth (PacketType 0x0001 / 0x0002 / 0x0003 / 0x0004) ────────────────────────────────────────
+// ── TCP Auth (PacketType 0x0001 / 0x0002) ──────────────────────────────────────
+// Login and Register are handled by the HTTP API:
+//   POST /api/auth/register  →  { playerId, username }
+//   POST /api/auth/login     →  { token (JWT), playerId, username }
+//
+// After receiving a JWT, the client connects via TCP and sends TcpAuthRequest.
+// The server validates the JWT and creates the game session.
 
-message LoginRequest {
-  string username = 1;
-  string password = 2;  // SHA-256 hash
-}
+// Client → Server: body = raw UTF-8 JWT string (no protobuf wrapper needed)
+// TcpAuthRequest is sent as plain bytes; no proto message defined.
 
+// Server → Client
 message LoginResponse {
   bool   success   = 1;
   int32  player_id = 2;
-  string token     = 3;  // session token on success, error message on failure
+  string token     = 3;  // JWT on success, error message on failure
 }
-
-message RegisterRequest {
-  string username = 1;
-  string password = 2;  // SHA-256 hash
-}
-
-message RegisterResponse {
-  bool   success   = 1;
-  int32  player_id = 2;
-  string token     = 3;  // session token on success, error message on failure
-}
-

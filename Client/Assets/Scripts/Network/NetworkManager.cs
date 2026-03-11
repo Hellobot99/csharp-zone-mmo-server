@@ -10,6 +10,10 @@ public class NetworkManager : MonoBehaviour
 
     [SerializeField] private string host = "127.0.0.1";
     [SerializeField] private int port = 7000;
+    [SerializeField] private int apiPort = 8080;
+
+    public string ApiBaseUrl => $"http://{host}:{apiPort}";
+    public bool IsConnected => _client != null && _client.Connected && _isRunning;
 
     private TcpClient _client;
     private NetworkStream _stream;

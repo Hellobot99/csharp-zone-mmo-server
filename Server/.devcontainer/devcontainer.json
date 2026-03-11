@@ -37,8 +37,9 @@
   // 컨테이너 생성 후 protoc + NuGet restore + dotnet-ef 툴 설치
   "postCreateCommand": "sudo chown -R vscode:vscode /nuget-packages && sudo apt-get update -qq && sudo apt-get install -y -qq protobuf-compiler make && sudo rm -rf src/GameServer/obj src/GameServer/bin && dotnet restore src/GameServer/GameServer.csproj && dotnet tool install --global dotnet-ef",
 
-  "forwardPorts": [7000],
+  "forwardPorts": [7000, 8080],
   "portsAttributes": {
-    "7000": { "label": "GameServer TCP", "onAutoForward": "silent" }
+    "7000": { "label": "GameServer TCP", "onAutoForward": "silent" },
+    "8080": { "label": "GameServer HTTP API", "onAutoForward": "silent" }
   }
 }
