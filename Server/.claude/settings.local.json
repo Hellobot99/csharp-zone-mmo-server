@@ -4,7 +4,11 @@
       "Bash(dotnet script:*)",
       "Bash(dotnet tool:*)",
       "Read(//tmp/**)",
-      "Bash(dbtest.csx:*)"
+      "Bash(dbtest.csx:*)",
+      "Bash(/workspaces/Project_charp_mmo/Server/docs/06-auth.md:*)",
+      "Bash(/workspaces/Project_charp_mmo/Server/docs/03-packet-protocol.md:*)",
+      "Bash(/workspaces/Project_charp_mmo/Server/docs/04-packet-handlers.md:*)",
+      "Bash(/workspaces/Project_charp_mmo/Server/docs/08-redis.md:*)"
     ]
   }
 }

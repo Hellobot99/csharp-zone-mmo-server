@@ -55,6 +55,8 @@ builder.Services.AddScoped<RequestSnapshotHandler>();
 builder.Services.AddScoped<ZoneTransferHandler>();
 builder.Services.AddScoped<EnterGameHandler>();
 builder.Services.AddScoped<PingPacketHandler>();
+builder.Services.AddScoped<SkillPacketHandler>();
+
 
 builder.Services.AddSingleton<PacketHandlerManager>(sp =>
 {
@@ -66,6 +68,8 @@ builder.Services.AddSingleton<PacketHandlerManager>(sp =>
     manager.Register<ZoneTransferHandler>((ushort)PacketType.ZoneTransferRequest);
     manager.Register<EnterGameHandler>((ushort)PacketType.EnterGame);
     manager.Register<PingPacketHandler>((ushort)PacketType.Ping);
+    manager.Register<SkillPacketHandler>((ushort)PacketType.SkillRequest);
+
     return manager;
 });
 
@@ -73,6 +77,8 @@ builder.Services.AddSingleton<PacketHandlerManager>(sp =>
 builder.Services.AddSingleton<TcpServer>();
 builder.Services.AddHostedService<GameServerHostedService>();
 builder.Services.AddHostedService<HeartbeatService>();
+builder.Services.AddSingleton<SkillPacketHandler>();
+
 
 // ── JWT Authentication ─────────────────────────────────────────────────────────
 var jwtSecret = builder.Configuration["Jwt:Secret"]

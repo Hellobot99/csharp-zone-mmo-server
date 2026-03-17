@@ -29,4 +29,12 @@ public enum PacketType : ushort
     EnterGame = 0x0109,
     ChatRequest = 0x0201,
     ChatBroadcast = 0x0202,
+
+    // ── Combat ────────────────────────────────────────────────────────────────
+    SkillRequest = 0x0301,
+    SkillResponse = 0x0302,
+    DamageResponse = 0x0304,
+    DeathResponse = 0x0306,
+    RespawnResponse = 0x0308,
+
 }

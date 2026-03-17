@@ -64,3 +64,25 @@ message ZoneTransferResponse {
     float spawn_x = 3;
     float spawn_y = 4;
 }
+
+// ── Skill ────────────────────────────────────────
+
+message SkillRequest {}
+
+message SkillResponse {
+  int32 player_id = 1; int32 color_index = 2; int32 atk = 3; 
+}
+
+// ── Combat ────────────────────────────────────────
+
+message DamageResponse { 
+  int32 attacker_id = 1; int32 target_id = 2; int32 damage = 3; int32 remain_hp = 4; 
+}
+
+message DeathResponse  { 
+ int32 dead_player_id = 1; 
+}
+
+message RespawnResponse {
+  int32 player_id = 1; float x = 2; float y = 3; int32 hp = 4; 
+}
