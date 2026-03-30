@@ -35,8 +35,40 @@ public class LocalPlayer : MonoBehaviour
         return inputField != null && inputField.isFocused;
     }
 
+    private static readonly Color[] PlayerColors = new[]
+    {
+        Color.white, Color.red, Color.blue, Color.green,
+        Color.yellow, Color.magenta, Color.cyan
+    };
+
+    public bool IsDead { get; private set; }
+
+    public void SetColor(int colorIndex)
+    {
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr != null) sr.color = PlayerColors[colorIndex % PlayerColors.Length];
+    }
+
+    public void OnDeath()
+    {
+        IsDead = true;
+        _rb.linearVelocity = Vector2.zero;
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr != null) sr.color = new Color(0.3f, 0.3f, 0.3f);
+    }
+
+    public void OnRespawn(float x, float y)
+    {
+        IsDead = false;
+        _rb.position = new Vector2(x, y);
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr != null) sr.color = Color.white;
+    }
+
     private void HandleMovement()
     {
+        if (IsDead) return;
+
         var kb = Keyboard.current;
         if (kb == null) return;
 

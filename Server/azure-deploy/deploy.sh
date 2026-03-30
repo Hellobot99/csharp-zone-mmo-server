@@ -38,12 +38,20 @@ az vm create \
   --public-ip-sku Standard \
   --output table
 
-# ── 3. Open port 7000 (TCP) ───────────────────────────────────────────────────
-echo ">>> Opening port 7000"
+# ── 3. Open ports ─────────────────────────────────────────────────────────────
+echo ">>> Opening port 7000 (TCP game)"
 az vm open-port \
   --resource-group "$RESOURCE_GROUP" \
   --name "$VM_NAME" \
-  --port 7000
+  --port 7000 \
+  --priority 1000
+
+echo ">>> Opening port 8080 (HTTP API)"
+az vm open-port \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VM_NAME" \
+  --port 8080 \
+  --priority 1001
 
 # ── 4. Get public IP ──────────────────────────────────────────────────────────
 PUBLIC_IP=$(az vm show \

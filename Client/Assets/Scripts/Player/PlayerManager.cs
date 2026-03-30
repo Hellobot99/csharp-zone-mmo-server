@@ -11,11 +11,14 @@ public class PlayerManager : MonoBehaviour
 
     private void Start()
     {
-        NetworkManager.Instance.Dispatcher.Register(PacketType.ZoneSnapshot,        OnZoneSnapshot);
-        NetworkManager.Instance.Dispatcher.Register(PacketType.PlayerEnter,         OnPlayerEnter);
-        NetworkManager.Instance.Dispatcher.Register(PacketType.PlayerLeave,         OnPlayerLeave);
-        NetworkManager.Instance.Dispatcher.Register(PacketType.MoveResponse,        OnMoveResponse);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.ZoneSnapshot,         OnZoneSnapshot);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.PlayerEnter,          OnPlayerEnter);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.PlayerLeave,          OnPlayerLeave);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.MoveResponse,         OnMoveResponse);
         NetworkManager.Instance.Dispatcher.Register(PacketType.ZoneTransferResponse, OnZoneTransfer);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.SkillResponse,        OnSkillResponse);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.DeathResponse,        OnDeathResponse);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.RespawnResponse,      OnRespawnResponse);
 
         // GameScene 로드 후 핸들러가 준비된 시점에 스냅샷 요청 + 게임 입장 알림
         NetworkManager.Instance.Send(PacketType.RequestSnapshot, Array.Empty<byte>());
@@ -80,6 +83,44 @@ public class PlayerManager : MonoBehaviour
 
         ZoneUI.Instance?.SetZone(resp.ZoneId);
         NetworkManager.Instance.Send(PacketType.RequestSnapshot, Array.Empty<byte>());
+    }
+
+    private void OnSkillResponse(byte[] body)
+    {
+        var resp = GameProto.SkillResponse.Parser.ParseFrom(body);
+        if (!GameManager.ObserverMode && resp.PlayerId == LoginHandler.PlayerId)
+        {
+            var local = FindFirstObjectByType<LocalPlayer>();
+            if (local != null)
+                local.SetColor(resp.ColorIndex);
+            return;
+        }
+        if (_remotePlayers.TryGetValue(resp.PlayerId, out var player))
+            player.SetColor(resp.ColorIndex);
+    }
+
+    private void OnDeathResponse(byte[] body)
+    {
+        var resp = GameProto.DeathResponse.Parser.ParseFrom(body);
+        if (!GameManager.ObserverMode && resp.DeadPlayerId == LoginHandler.PlayerId)
+        {
+            FindFirstObjectByType<LocalPlayer>()?.OnDeath();
+            return;
+        }
+        if (_remotePlayers.TryGetValue(resp.DeadPlayerId, out var player))
+            player.OnDeath();
+    }
+
+    private void OnRespawnResponse(byte[] body)
+    {
+        var resp = GameProto.RespawnResponse.Parser.ParseFrom(body);
+        if (!GameManager.ObserverMode && resp.PlayerId == LoginHandler.PlayerId)
+        {
+            FindFirstObjectByType<LocalPlayer>()?.OnRespawn(resp.X, resp.Y);
+            return;
+        }
+        if (_remotePlayers.TryGetValue(resp.PlayerId, out var player))
+            player.OnRespawn(resp.X, resp.Y);
     }
 
     // ── 헬퍼 ────────────────────────────────────────────────────────────────────

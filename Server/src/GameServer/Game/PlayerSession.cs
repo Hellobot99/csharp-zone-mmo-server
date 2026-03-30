@@ -17,5 +17,6 @@ public class PlayerSession
     public int Atk { get; set; } = 10;
     public bool IsDead => Hp <= 0;
     public DateTime LastAttackTime { get; set; } = DateTime.MinValue;
+    public DateTime LastSkillTime { get; set; } = DateTime.MinValue;
     public int ColorIndex { get; set; } = 0;
 }

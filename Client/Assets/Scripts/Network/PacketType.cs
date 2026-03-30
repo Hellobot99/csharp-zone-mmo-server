@@ -22,4 +22,11 @@ public static class PacketType
     public const ushort EnterGame           = 0x0109;
     public const ushort ChatRequest         = 0x0201;
     public const ushort ChatBroadcast       = 0x0202;
+
+    // Combat
+    public const ushort SkillRequest    = 0x0301;
+    public const ushort SkillResponse   = 0x0302;
+    public const ushort DamageResponse  = 0x0304;
+    public const ushort DeathResponse   = 0x0306;
+    public const ushort RespawnResponse = 0x0308;
 }
