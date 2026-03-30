@@ -54,18 +54,16 @@ public class RemotePlayer : MonoBehaviour
         if (_sr != null) _sr.color = new Color(0.3f, 0.3f, 0.3f);
     }
 
-    public void OnRespawn(float x, float y)
+    public void OnRespawn(float _, float __)
     {
         _isDead = false;
-        _targetPosition = new Vector3(x, y, 0f);
-        transform.position = _targetPosition;
         StartCoroutine(RespawnFlash());
     }
 
     private IEnumerator RespawnFlash()
     {
         if (_sr != null) _sr.color = Color.green;
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(2.5f);
         if (_sr != null) _sr.color = Color.white;
     }
 }

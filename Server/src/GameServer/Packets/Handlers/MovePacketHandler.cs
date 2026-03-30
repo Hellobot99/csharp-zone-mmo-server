@@ -95,8 +95,6 @@ public sealed class MovePacketHandler : IPacketHandler
         ps.Hp = ps.MaxHp;
         ps.Atk = 10;
         ps.ColorIndex = 0;
-        ps.X = 0f;
-        ps.Y = 0f;
         ps.IsInvincible = true;
 
         zone.Broadcast(PacketType.RespawnResponse, new RespawnResponse

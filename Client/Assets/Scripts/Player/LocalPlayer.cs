@@ -59,10 +59,9 @@ public class LocalPlayer : MonoBehaviour
         if (sr != null) sr.color = new Color(0.3f, 0.3f, 0.3f);
     }
 
-    public void OnRespawn(float x, float y)
+    public void OnRespawn(float _, float __)
     {
         IsDead = false;
-        _rb.position = new Vector2(x, y);
         StartCoroutine(RespawnFlash());
     }
 
@@ -70,7 +69,7 @@ public class LocalPlayer : MonoBehaviour
     {
         var sr = GetComponent<SpriteRenderer>();
         if (sr != null) sr.color = Color.green;
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(2.5f);
         if (sr != null) sr.color = Color.white;
     }
 
