@@ -9,7 +9,7 @@ public sealed class MovePacketHandler : IPacketHandler
     private readonly SessionManager _sessions;
     private readonly ZoneManager _zones;
 
-    private const float AttackRangeSq = 1.5f * 1.5f;  // 거리 1.5 이하면 공격
+    private const float AttackRangeSq = 12f * 12f;  // 거리 12 이하면 공격
     private const int AttackCooldownMs = 500;
 
     public MovePacketHandler(SessionManager sessions, ZoneManager zones)
