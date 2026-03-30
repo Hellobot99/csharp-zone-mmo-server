@@ -16,7 +16,7 @@ public class PlayerManager : MonoBehaviour
         NetworkManager.Instance.Dispatcher.Register(PacketType.PlayerLeave,          OnPlayerLeave);
         NetworkManager.Instance.Dispatcher.Register(PacketType.MoveResponse,         OnMoveResponse);
         NetworkManager.Instance.Dispatcher.Register(PacketType.ZoneTransferResponse, OnZoneTransfer);
-        NetworkManager.Instance.Dispatcher.Register(PacketType.SkillResponse,        OnSkillResponse);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.DamageResponse,       OnDamageResponse);
         NetworkManager.Instance.Dispatcher.Register(PacketType.DeathResponse,        OnDeathResponse);
         NetworkManager.Instance.Dispatcher.Register(PacketType.RespawnResponse,      OnRespawnResponse);
 
@@ -85,18 +85,16 @@ public class PlayerManager : MonoBehaviour
         NetworkManager.Instance.Send(PacketType.RequestSnapshot, Array.Empty<byte>());
     }
 
-    private void OnSkillResponse(byte[] body)
+    private void OnDamageResponse(byte[] body)
     {
-        var resp = GameProto.SkillResponse.Parser.ParseFrom(body);
-        if (!GameManager.ObserverMode && resp.PlayerId == LoginHandler.PlayerId)
+        var resp = GameProto.DamageResponse.Parser.ParseFrom(body);
+        if (!GameManager.ObserverMode && resp.TargetId == LoginHandler.PlayerId)
         {
-            var local = FindFirstObjectByType<LocalPlayer>();
-            if (local != null)
-                local.SetColor(resp.ColorIndex);
+            FindFirstObjectByType<LocalPlayer>()?.FlashDamage();
             return;
         }
-        if (_remotePlayers.TryGetValue(resp.PlayerId, out var player))
-            player.SetColor(resp.ColorIndex);
+        if (_remotePlayers.TryGetValue(resp.TargetId, out var player))
+            player.FlashDamage();
     }
 
     private void OnDeathResponse(byte[] body)

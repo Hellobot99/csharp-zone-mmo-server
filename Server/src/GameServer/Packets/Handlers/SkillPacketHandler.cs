@@ -29,15 +29,6 @@ public sealed class SkillPacketHandler : IPacketHandler
 
         ps.LastSkillTime = DateTime.UtcNow;
         ps.Atk += 1;
-        ps.ColorIndex += 1;
-
-        var zone = _zones.GetOrCreate(ps.ZoneId);
-        zone.Broadcast(PacketType.SkillResponse, new SkillResponse
-        {
-            PlayerId = ps.PlayerId,
-            ColorIndex = ps.ColorIndex,
-            Atk = ps.Atk,
-        });
 
         return Task.CompletedTask;
     }

@@ -1,18 +1,14 @@
+using System.Collections;
 using UnityEngine;
 
 public class RemotePlayer : MonoBehaviour
 {
     [SerializeField] private float lerpSpeed = 10f;
 
-    private static readonly Color[] PlayerColors = new[]
-    {
-        Color.white, Color.red, Color.blue, Color.green,
-        Color.yellow, Color.magenta, Color.cyan
-    };
-
     private Vector3 _targetPosition;
     private bool _hasTarget;
     private SpriteRenderer _sr;
+    private bool _isDead;
 
     public string Username { get; private set; }
 
@@ -39,19 +35,28 @@ public class RemotePlayer : MonoBehaviour
         _hasTarget = true;
     }
 
-    public void SetColor(int colorIndex)
+    public void FlashDamage()
     {
-        if (_sr == null) return;
-        _sr.color = PlayerColors[colorIndex % PlayerColors.Length];
+        if (!_isDead) StartCoroutine(DamageFlash());
+    }
+
+    private IEnumerator DamageFlash()
+    {
+        if (_sr != null) _sr.color = Color.red;
+        yield return new WaitForSeconds(0.2f);
+        if (!_isDead && _sr != null) _sr.color = Color.white;
     }
 
     public void OnDeath()
     {
+        _isDead = true;
+        StopAllCoroutines();
         if (_sr != null) _sr.color = new Color(0.3f, 0.3f, 0.3f);
     }
 
     public void OnRespawn(float x, float y)
     {
+        _isDead = false;
         _targetPosition = new Vector3(x, y, 0f);
         transform.position = _targetPosition;
         if (_sr != null) _sr.color = Color.white;
