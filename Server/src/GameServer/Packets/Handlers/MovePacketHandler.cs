@@ -45,6 +45,7 @@ public sealed class MovePacketHandler : IPacketHandler
             {
                 if (other.PlayerId == ps.PlayerId) continue;
                 if (other.IsDead) continue;
+                if (other.IsInvincible) continue;
 
                 float dx = ps.X - other.X;
                 float dy = ps.Y - other.Y;
@@ -96,6 +97,7 @@ public sealed class MovePacketHandler : IPacketHandler
         ps.ColorIndex = 0;
         ps.X = 0f;
         ps.Y = 0f;
+        ps.IsInvincible = true;
 
         zone.Broadcast(PacketType.RespawnResponse, new RespawnResponse
         {
@@ -104,5 +106,8 @@ public sealed class MovePacketHandler : IPacketHandler
             Y = ps.Y,
             Hp = ps.Hp,
         });
+
+        await Task.Delay(3000);
+        ps.IsInvincible = false;
     }
 }

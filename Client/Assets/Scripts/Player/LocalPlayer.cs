@@ -63,7 +63,14 @@ public class LocalPlayer : MonoBehaviour
     {
         IsDead = false;
         _rb.position = new Vector2(x, y);
+        StartCoroutine(RespawnFlash());
+    }
+
+    private System.Collections.IEnumerator RespawnFlash()
+    {
         var sr = GetComponent<SpriteRenderer>();
+        if (sr != null) sr.color = Color.green;
+        yield return new WaitForSeconds(0.5f);
         if (sr != null) sr.color = Color.white;
     }
 
