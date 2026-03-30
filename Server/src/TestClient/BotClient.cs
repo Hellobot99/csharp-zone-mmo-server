@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Text;
 using GameProto;
 using Google.Protobuf;
 
@@ -27,6 +29,8 @@ public class BotClient
         [7] = (  0f,   0f), [8] = (300f,   0f), [9] = (600f,   0f),
     };
 
+    private static readonly HttpClient Http = new();
+
     private readonly string _host;
     private readonly int _port;
     private readonly string _username;
@@ -47,6 +51,7 @@ public class BotClient
     public float X { get; private set; }
     public float Y { get; private set; }
     public bool Connected { get; private set; }
+    public bool IsDead { get; private set; }
 
     // 전송 카운터
     public long MoveRequestsSent { get; private set; }
@@ -85,16 +90,25 @@ public class BotClient
     {
         try
         {
+            // HTTP 회원가입/로그인으로 JWT 획득 후 TCP 연결
+            await RegisterAsync(ct);  // 이미 있으면 서버가 무시
+
             _client = new TcpClient();
             await _client.ConnectAsync(_host, _port, ct);
             _stream = _client.GetStream();
             Connected = true;
 
-            // 로그인 시도 → 실패하면 회원가입 후 재로그인
-            if (!await LoginAsync(ct))
+            // JWT를 TCP TcpAuthRequest로 인증 (Already logged in 대비 재시도)
+            bool authed = false;
+            for (int attempt = 0; attempt < 5; attempt++)
             {
-                await RegisterAsync(ct);
-                await LoginAsync(ct);
+                if (await LoginAsync(ct)) { authed = true; break; }
+                await Task.Delay(2000 * (attempt + 1), ct);
+            }
+            if (!authed)
+            {
+                Console.WriteLine($"[Bot{BotId}] Auth failed");
+                return;
             }
 
             // 랜덤 존으로 먼저 이동 (ZoneTransferResponse 올 때까지 직접 대기)
@@ -135,11 +149,21 @@ public class BotClient
 
     private async Task<bool> LoginAsync(CancellationToken ct)
     {
-        Send(0x0001, new LoginRequest { Username = _username, Password = _password }.ToByteArray());
+        var res = await Http.PostAsJsonAsync(
+            $"http://{_host}:8080/api/auth/login",
+            new { username = _username, password = _password }, ct);
+        if (!res.IsSuccessStatusCode) return false;
+
+        var json = await res.Content.ReadFromJsonAsync<HttpLoginResponse>(ct);
+        if (json is null || string.IsNullOrEmpty(json.Token)) return false;
+
+        // JWT를 TCP TcpAuthRequest로 전달
+        Send(0x0001, Encoding.UTF8.GetBytes(json.Token));
         var (type, body) = await ReadPacketAsync(ct);
         if (type != 0x0002) return false;
         var resp = LoginResponse.Parser.ParseFrom(body);
         if (!resp.Success) return false;
+
         PlayerId = resp.PlayerId;
         var spawn = SpawnPoints[ZoneId];
         X = spawn.X; Y = spawn.Y;
@@ -148,9 +172,12 @@ public class BotClient
 
     private async Task RegisterAsync(CancellationToken ct)
     {
-        Send(0x0003, new RegisterRequest { Username = _username, Password = _password }.ToByteArray());
-        await ReadPacketAsync(ct);
+        await Http.PostAsJsonAsync(
+            $"http://{_host}:8080/api/auth/register",
+            new { username = _username, password = _password }, ct);
     }
+
+    private record HttpLoginResponse(string Token, int PlayerId, string Username);
 
     // ── 이동 루프 ────────────────────────────────────────────────────────────
 
@@ -164,6 +191,8 @@ public class BotClient
         while (!ct.IsCancellationRequested)
         {
             await Task.Delay(moveInterval, ct);
+
+            if (IsDead) continue;
 
             X += vx * 0.1f;
             Y += vy * 0.1f;
@@ -248,6 +277,20 @@ public class BotClient
                         X = ztr.SpawnX;
                         Y = ztr.SpawnY;
                         Send(0x0103, Array.Empty<byte>());
+                    }
+                    break;
+
+                case 0x0306: // DeathResponse
+                    var dr = DeathResponse.Parser.ParseFrom(body);
+                    if (dr.DeadPlayerId == PlayerId) IsDead = true;
+                    break;
+
+                case 0x0308: // RespawnResponse
+                    var rr = RespawnResponse.Parser.ParseFrom(body);
+                    if (rr.PlayerId == PlayerId)
+                    {
+                        IsDead = false;
+                        X = rr.X; Y = rr.Y;
                     }
                     break;
 
