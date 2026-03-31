@@ -88,6 +88,11 @@ public class MatchmakingManager
         ps.Hp = ps.MaxHp;
         ps.IsInvincible = true;
 
+        // 아레나 진입 브로드캐스트 (옵저버가 RemotePlayer 등록할 수 있도록)
+        _zones.GetOrCreate(arenaId).Broadcast(PacketType.PlayerEnter,
+            new GameProto.PlayerEnter { PlayerId = ps.PlayerId, Username = ps.Username, X = spawnX, Y = spawnY },
+            excludePlayerId: ps.PlayerId);
+
         ps.Connection.Send(PacketType.MatchStarted, new MatchStarted
         {
             ZoneId = arenaId,
