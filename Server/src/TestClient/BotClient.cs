@@ -136,9 +136,8 @@ public class BotClient
             Send(0x0103, Array.Empty<byte>()); // RequestSnapshot
             Send(0x0109, Array.Empty<byte>()); // EnterGame
 
-            // 3초 후 매치메이킹 요청
-            await Task.Delay(3000, ct);
-            Send(0x0401, Array.Empty<byte>()); // MatchmakeRequest
+            // 랜덤 시간 후 매치메이킹 요청
+            _ = RequestMatchAfterDelayAsync(ct);
 
             var receiveTask = ReceiveLoopAsync(ct);
             await MoveLoopAsync(ct);
@@ -179,6 +178,14 @@ public class BotClient
         await Http.PostAsJsonAsync(
             $"http://{_host}:8080/api/auth/register",
             new { username = _username, password = _password }, ct);
+    }
+
+    private async Task RequestMatchAfterDelayAsync(CancellationToken ct)
+    {
+        int delay = _rng.Next(10000, 30000);
+        await Task.Delay(delay, ct);
+        if (!ct.IsCancellationRequested)
+            Send(0x0401, Array.Empty<byte>());
     }
 
     private record HttpLoginResponse(string Token, int PlayerId, string Username);
@@ -290,12 +297,8 @@ public class BotClient
                     X = ms.SpawnX; Y = ms.SpawnY;
                     break;
 
-                case 0x0406: // MatchEnded — 3초 후 자동 매치메이킹 재요청
-                    _ = Task.Delay(4000, ct).ContinueWith(_ =>
-                    {
-                        if (!ct.IsCancellationRequested)
-                            Send(0x0401, Array.Empty<byte>());
-                    }, ct);
+                case 0x0406: // MatchEnded — 랜덤 시간 후 재매칭
+                    _ = RequestMatchAfterDelayAsync(ct);
                     break;
 
                 case 0x0306: // DeathResponse

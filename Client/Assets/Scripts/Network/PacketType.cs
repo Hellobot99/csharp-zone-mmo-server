@@ -5,6 +5,7 @@ public static class PacketType
     // After receiving a JWT, the client connects via TCP and sends TcpAuthRequest.
     public const ushort TcpAuthRequest  = 0x0001;
     public const ushort TcpAuthResponse = 0x0002;
+    public const ushort SpawnResponse   = 0x0003;
 
     // Heartbeat
     public const ushort Ping = 0x0011;

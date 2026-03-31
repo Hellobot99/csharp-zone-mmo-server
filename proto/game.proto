@@ -2,6 +2,16 @@ syntax = "proto3";
 
 option csharp_namespace = "GameProto";
 
+// ── Spawn (PacketType 0x0003) ─────────────────────────────────────────────────
+// Sent by server immediately after successful TcpAuthResponse.
+// Client uses this to position the local player.
+
+message SpawnResponse {
+  float x       = 1;
+  float y       = 2;
+  int32 zone_id = 3;
+}
+
 // ── Heartbeat (PacketType 0x0011 / 0x0012) ───────────────────────────────────
 
 message Ping {}

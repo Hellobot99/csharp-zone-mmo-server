@@ -19,12 +19,14 @@ public class PlayerManager : MonoBehaviour
         NetworkManager.Instance.Dispatcher.Register(PacketType.DamageResponse,       OnDamageResponse);
         NetworkManager.Instance.Dispatcher.Register(PacketType.DeathResponse,        OnDeathResponse);
         NetworkManager.Instance.Dispatcher.Register(PacketType.RespawnResponse,      OnRespawnResponse);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.MatchStarted,         OnMatchStarted);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.MatchEnded,           OnMatchEnded);
 
         // GameScene 로드 후 핸들러가 준비된 시점에 스냅샷 요청 + 게임 입장 알림
         NetworkManager.Instance.Send(PacketType.RequestSnapshot, Array.Empty<byte>());
         if (!GameManager.ObserverMode)
             NetworkManager.Instance.Send(PacketType.EnterGame, Array.Empty<byte>());
-        ZoneUI.Instance?.SetZone(1);
+        ZoneUI.Instance?.SetZone(10);
     }
 
     // ── 핸들러 ──────────────────────────────────────────────────────────────────
@@ -119,6 +121,24 @@ public class PlayerManager : MonoBehaviour
         }
         if (_remotePlayers.TryGetValue(resp.PlayerId, out var player))
             player.OnRespawn(resp.X, resp.Y);
+    }
+
+    private void OnMatchStarted(byte[] body)
+    {
+        var resp = GameProto.MatchStarted.Parser.ParseFrom(body);
+
+        foreach (var p in _remotePlayers.Values)
+            Destroy(p.gameObject);
+        _remotePlayers.Clear();
+
+        ZoneUI.Instance?.SetZone(resp.ZoneId);
+        NetworkManager.Instance.Send(PacketType.RequestSnapshot, Array.Empty<byte>());
+    }
+
+    private void OnMatchEnded(byte[] body)
+    {
+        // ZoneTransferResponse로 로비 이동이 오므로 별도 처리 불필요
+        // 필요 시 UI 표시 추가
     }
 
     // ── 헬퍼 ────────────────────────────────────────────────────────────────────
