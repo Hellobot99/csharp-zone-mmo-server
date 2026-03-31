@@ -13,9 +13,15 @@ public class MatchmakingManager
     // 아레나별 스폰 위치
     private static readonly Dictionary<int, (float X1, float Y1, float X2, float Y2)> ArenaSpawns = new()
     {
-        [1] = (  0f, 650f,   0f, 550f), [2] = (300f, 650f, 300f, 550f), [3] = (600f, 650f, 600f, 550f),
-        [4] = (  0f, 350f,   0f, 250f), [5] = (300f, 350f, 300f, 250f), [6] = (600f, 350f, 600f, 250f),
-        [7] = (  0f,  50f,   0f, -50f), [8] = (300f,  50f, 300f, -50f), [9] = (600f,  50f, 600f, -50f),
+        [1] = (0f, 650f, 0f, 550f),
+        [2] = (300f, 650f, 300f, 550f),
+        [3] = (600f, 650f, 600f, 550f),
+        [4] = (0f, 350f, 0f, 250f),
+        [5] = (300f, 350f, 300f, 250f),
+        [6] = (600f, 350f, 600f, 250f),
+        [7] = (0f, 50f, 0f, -50f),
+        [8] = (300f, 50f, 300f, -50f),
+        [9] = (600f, 50f, 600f, -50f),
     };
 
     public const int LobbyZoneId = 10;
@@ -99,12 +105,12 @@ public class MatchmakingManager
         if (!_activeMatches.TryRemove(arenaId, out var match)) return;
 
         var winner = match.P1.PlayerId == killer.PlayerId ? match.P1 : match.P2;
-        var loser  = match.P1.PlayerId == dead.PlayerId   ? match.P1 : match.P2;
+        var loser = match.P1.PlayerId == dead.PlayerId ? match.P1 : match.P2;
 
         var endPacket = PacketHelper.Build(PacketType.MatchEnded, new MatchEnded
         {
             WinnerId = winner.PlayerId,
-            LoserId  = loser.PlayerId,
+            LoserId = loser.PlayerId,
         });
 
         winner.Connection.Send(endPacket);
@@ -123,6 +129,10 @@ public class MatchmakingManager
 
     public void MoveToLobby(PlayerSession ps)
     {
+        // 아레나에서 퇴장 브로드캐스트
+        _zones.GetOrCreate(ps.ZoneId).Broadcast(PacketType.PlayerLeave,
+            new GameProto.PlayerLeave { PlayerId = ps.PlayerId });
+
         ps.Hp = ps.MaxHp;
         ps.X = LobbySpawn.X;
         ps.Y = LobbySpawn.Y;
@@ -136,10 +146,24 @@ public class MatchmakingManager
         ps.Connection.Send(PacketType.ZoneTransferResponse, new ZoneTransferResponse
         {
             Success = true,
-            ZoneId  = LobbyZoneId,
-            SpawnX  = LobbySpawn.X,
-            SpawnY  = LobbySpawn.Y,
+            ZoneId = LobbyZoneId,
+            SpawnX = LobbySpawn.X,
+            SpawnY = LobbySpawn.Y,
         });
+    }
+
+    public void OnPlayerDisconnected(PlayerSession ps)
+    {
+        var entry = _activeMatches.FirstOrDefault(m =>
+            m.Value.P1.PlayerId == ps.PlayerId || m.Value.P2.PlayerId == ps.PlayerId);
+        if (entry.Value == default) return;
+
+        if (_activeMatches.TryRemove(entry.Key, out var match))
+        {
+            var survivor = match.P1.PlayerId == ps.PlayerId ? match.P2 : match.P1;
+            MoveToLobby(survivor);
+            _logger.LogInformation("[Matchmaking] Player {Id} disconnected mid-match — survivor {SId} moved to lobby", ps.PlayerId, survivor.PlayerId);
+        }
     }
 
     private int FindFreeArena()
