@@ -135,7 +135,7 @@ public class PlayerManager : MonoBehaviour
         if (localPlayer != null) Destroy(localPlayer);
 
         var player = go.GetComponent<RemotePlayer>() ?? go.AddComponent<RemotePlayer>();
-        player.Setup(username);
+        player.Setup(playerId, username);
         _remotePlayers[playerId] = player;
     }
 

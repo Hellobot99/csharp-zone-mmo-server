@@ -328,7 +328,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3236e9a984284dc409060320ce5ee465, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerManager
-  remotePlayerPrefab: {fileID: 8840940493978978431, guid: 9b65a22b0bbce7a47960944b72dafe70, type: 3}
+  remotePlayerPrefab: {fileID: 6579760496816102593, guid: 9b65a22b0bbce7a47960944b72dafe70, type: 3}
 --- !u!4 &111454257
 Transform:
   m_ObjectHideFlags: 0
@@ -1602,7 +1602,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1906155826}
   m_HandleRect: {fileID: 1906155825}
   m_Direction: 0
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -3785,6 +3785,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NetworkManager
   host: 127.0.0.1
   port: 7000
+  apiPort: 8080
 --- !u!1 &2016435067 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 9203708848175537982, guid: 5f81c82d39ea30d42967b6696361661d, type: 3}

@@ -1,9 +1,12 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 
 public class RemotePlayer : MonoBehaviour
 {
     [SerializeField] private float lerpSpeed = 10f;
+
+    [SerializeField] private TextMeshPro _label;
 
     private Vector3 _targetPosition;
     private bool _hasTarget;
@@ -11,6 +14,7 @@ public class RemotePlayer : MonoBehaviour
     private bool _isDead;
 
     public string Username { get; private set; }
+    public int PlayerId { get; private set; }
 
     private void Awake()
     {
@@ -24,9 +28,13 @@ public class RemotePlayer : MonoBehaviour
             transform.position = Vector3.Lerp(transform.position, _targetPosition, lerpSpeed * Time.deltaTime);
     }
 
-    public void Setup(string username)
+    public void Setup(int playerId, string username)
     {
+        PlayerId = playerId;
         Username = username;
+
+        if (_label != null)
+            _label.text = playerId.ToString();
     }
 
     public void SetTargetPosition(float x, float y, float z)

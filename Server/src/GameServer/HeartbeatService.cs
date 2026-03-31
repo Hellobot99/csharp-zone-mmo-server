@@ -11,6 +11,7 @@ public sealed class HeartbeatService : BackgroundService
 
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan ObserverTimeout = TimeSpan.FromMinutes(10);
 
     public HeartbeatService(SessionManager sessions, ILogger<HeartbeatService> logger)
     {
@@ -27,8 +28,8 @@ public sealed class HeartbeatService : BackgroundService
             var now = DateTime.UtcNow;
             foreach (var ps in _sessions.GetAll())
             {
-                if (ps.IsObserver) continue;
-                if ((now - ps.LastPingAt) > Timeout)
+                var timeout = ps.IsObserver ? ObserverTimeout : Timeout;
+                if ((now - ps.LastPingAt) > timeout)
                 {
                     _logger.LogInformation(
                         "Heartbeat timeout – closing session for player {PlayerId} ({Username})",

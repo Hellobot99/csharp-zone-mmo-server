@@ -64,14 +64,8 @@ public sealed class TcpAuthHandler : IPacketHandler
         var existing = _sessions.GetByPlayerId(playerId);
         if (existing is not null)
         {
-            if (existing.Connection.IsConnected)
-            {
-                session.Send(PacketType.TcpAuthResponse, new LoginResponse { Success = false, Token = "Already logged in" });
-                return Task.CompletedTask;
-            }
-            // TCP는 끊겼지만 아직 세션이 정리 안 된 경우 — 직접 정리
-            _zones.Leave(existing);
-            _sessions.Remove(existing.Connection.SessionId);
+            _logger.LogInformation("[session={Id}] Player '{User}' reconnected – closing old session.", session.SessionId, username);
+            existing.Connection.Close();
         }
 
         var ps = _sessions.Add(session, playerId, username);
