@@ -76,7 +76,6 @@ public sealed class TcpAuthHandler : IPacketHandler
 
         _logger.LogInformation("[session={Id}] Player '{User}' (id={PlayerId}) authenticated via JWT.", session.SessionId, username, playerId);
         session.Send(PacketType.TcpAuthResponse, new LoginResponse { Success = true, PlayerId = playerId, Token = token });
-        session.Send(PacketType.SpawnResponse, new SpawnResponse { X = ps.X, Y = ps.Y, ZoneId = ps.ZoneId });
         return Task.CompletedTask;
     }
 }
