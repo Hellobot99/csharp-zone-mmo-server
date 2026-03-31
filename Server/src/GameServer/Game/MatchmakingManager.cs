@@ -19,7 +19,7 @@ public class MatchmakingManager
     };
 
     public const int LobbyZoneId = 10;
-    public static readonly (float X, float Y) LobbySpawn = (-740f, 740f);
+    public static readonly (float X, float Y) LobbySpawn = (-740f, 600f);
 
     private readonly ConcurrentQueue<PlayerSession> _queue = new();
     private readonly ConcurrentDictionary<int, (PlayerSession P1, PlayerSession P2)> _activeMatches = new(); // zoneId → match

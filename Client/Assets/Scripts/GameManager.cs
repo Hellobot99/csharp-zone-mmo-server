@@ -7,7 +7,7 @@ public class GameManager : MonoBehaviour
 
     [SerializeField] private GameObject localPlayerPrefab;
 
-    private void Start()
+    private void Awake()
     {
         NetworkManager.Instance.Dispatcher.Register(PacketType.SpawnResponse, OnSpawnResponse);
     }
