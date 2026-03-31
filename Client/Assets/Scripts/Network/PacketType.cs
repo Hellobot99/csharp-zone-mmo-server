@@ -29,4 +29,10 @@ public static class PacketType
     public const ushort DamageResponse  = 0x0304;
     public const ushort DeathResponse   = 0x0306;
     public const ushort RespawnResponse = 0x0308;
+
+    // Matchmaking
+    public const ushort MatchmakeRequest  = 0x0401;
+    public const ushort MatchmakeResponse = 0x0402;
+    public const ushort MatchStarted      = 0x0404;
+    public const ushort MatchEnded        = 0x0406;
 }

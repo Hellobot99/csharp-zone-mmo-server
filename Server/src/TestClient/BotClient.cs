@@ -136,6 +136,10 @@ public class BotClient
             Send(0x0103, Array.Empty<byte>()); // RequestSnapshot
             Send(0x0109, Array.Empty<byte>()); // EnterGame
 
+            // 3초 후 매치메이킹 요청
+            await Task.Delay(3000, ct);
+            Send(0x0401, Array.Empty<byte>()); // MatchmakeRequest
+
             var receiveTask = ReceiveLoopAsync(ct);
             await MoveLoopAsync(ct);
             await receiveTask;
@@ -278,6 +282,20 @@ public class BotClient
                         Y = ztr.SpawnY;
                         Send(0x0103, Array.Empty<byte>());
                     }
+                    break;
+
+                case 0x0404: // MatchStarted
+                    var ms = MatchStarted.Parser.ParseFrom(body);
+                    ZoneId = ms.ZoneId;
+                    X = ms.SpawnX; Y = ms.SpawnY;
+                    break;
+
+                case 0x0406: // MatchEnded — 3초 후 자동 매치메이킹 재요청
+                    _ = Task.Delay(4000, ct).ContinueWith(_ =>
+                    {
+                        if (!ct.IsCancellationRequested)
+                            Send(0x0401, Array.Empty<byte>());
+                    }, ct);
                     break;
 
                 case 0x0306: // DeathResponse

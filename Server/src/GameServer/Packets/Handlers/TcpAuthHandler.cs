@@ -70,9 +70,9 @@ public sealed class TcpAuthHandler : IPacketHandler
 
         var ps = _sessions.Add(session, playerId, username);
         ps.IsObserver = username.StartsWith('~');
-        ps.X = 0f;
-        ps.Y = 600f;
-        _zones.Enter(ps, zoneId: 1);
+        ps.X = MatchmakingManager.LobbySpawn.X;
+        ps.Y = MatchmakingManager.LobbySpawn.Y;
+        _zones.Enter(ps, zoneId: MatchmakingManager.LobbyZoneId);
 
         _logger.LogInformation("[session={Id}] Player '{User}' (id={PlayerId}) authenticated via JWT.", session.SessionId, username, playerId);
         session.Send(PacketType.TcpAuthResponse, new LoginResponse { Success = true, PlayerId = playerId, Token = token });

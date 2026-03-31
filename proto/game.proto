@@ -84,5 +84,25 @@ message DeathResponse  {
 }
 
 message RespawnResponse {
-  int32 player_id = 1; float x = 2; float y = 3; int32 hp = 4; 
+  int32 player_id = 1; float x = 2; float y = 3; int32 hp = 4;
+}
+
+// ── Matchmaking ────────────────────────────────────────
+message MatchmakeRequest {}
+
+message MatchmakeResponse {
+  bool   success = 1;
+  string message = 2;
+}
+
+message MatchStarted {
+  int32 zone_id     = 1;
+  int32 opponent_id = 2;
+  float spawn_x     = 3;
+  float spawn_y     = 4;
+}
+
+message MatchEnded {
+  int32 winner_id = 1;
+  int32 loser_id  = 2;
 }

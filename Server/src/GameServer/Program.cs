@@ -46,6 +46,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 // ── Game ───────────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<SessionManager>();
 builder.Services.AddSingleton<ZoneManager>();
+builder.Services.AddSingleton<MatchmakingManager>();
 
 // ── Packet Handlers ────────────────────────────────────────────────────────────
 builder.Services.AddScoped<TcpAuthHandler>();
@@ -56,6 +57,7 @@ builder.Services.AddScoped<ZoneTransferHandler>();
 builder.Services.AddScoped<EnterGameHandler>();
 builder.Services.AddScoped<PingPacketHandler>();
 builder.Services.AddScoped<SkillPacketHandler>();
+builder.Services.AddScoped<MatchmakePacketHandler>();
 
 
 builder.Services.AddSingleton<PacketHandlerManager>(sp =>
@@ -69,6 +71,7 @@ builder.Services.AddSingleton<PacketHandlerManager>(sp =>
     manager.Register<EnterGameHandler>((ushort)PacketType.EnterGame);
     manager.Register<PingPacketHandler>((ushort)PacketType.Ping);
     manager.Register<SkillPacketHandler>((ushort)PacketType.SkillRequest);
+    manager.Register<MatchmakePacketHandler>((ushort)PacketType.MatchmakeRequest);
 
     return manager;
 });

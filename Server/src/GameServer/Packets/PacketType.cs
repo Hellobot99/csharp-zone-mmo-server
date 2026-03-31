@@ -37,4 +37,10 @@ public enum PacketType : ushort
     DeathResponse = 0x0306,
     RespawnResponse = 0x0308,
 
+    // ── Matchmaking ───────────────────────────────────────────────────────────
+    MatchmakeRequest  = 0x0401,
+    MatchmakeResponse = 0x0402,
+    MatchStarted      = 0x0404,
+    MatchEnded        = 0x0406,
+
 }
