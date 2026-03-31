@@ -111,28 +111,6 @@ public class BotClient
                 return;
             }
 
-            // 랜덤 존으로 먼저 이동 (ZoneTransferResponse 올 때까지 직접 대기)
-            int startZone = _rng.Next(1, 10);
-            if (startZone != 1)
-            {
-                SendZoneTransfer(startZone);
-                while (true)
-                {
-                    var (type, body) = await ReadPacketAsync(ct);
-                    if (type == 0x0108)
-                    {
-                        var ztr = ZoneTransferResponse.Parser.ParseFrom(body);
-                        if (ztr.Success)
-                        {
-                            RecordZtRtt();
-                            ZoneTransferResponsesReceived++;
-                            ZoneId = ztr.ZoneId; X = ztr.SpawnX; Y = ztr.SpawnY;
-                        }
-                        break;
-                    }
-                }
-            }
-
             Send(0x0103, Array.Empty<byte>()); // RequestSnapshot
             Send(0x0109, Array.Empty<byte>()); // EnterGame
 
@@ -168,8 +146,8 @@ public class BotClient
         if (!resp.Success) return false;
 
         PlayerId = resp.PlayerId;
-        var spawn = SpawnPoints[ZoneId];
-        X = spawn.X; Y = spawn.Y;
+        ZoneId = 10;
+        X = -740f; Y = 320f;
         return true;
     }
 
@@ -208,14 +186,12 @@ public class BotClient
             X += vx * 0.1f;
             Y += vy * 0.1f;
 
-            if (ZoneBounds.TryGetValue(ZoneId, out var b) && Neighbors.TryGetValue(ZoneId, out var nb))
+            if (ZoneBounds.TryGetValue(ZoneId, out var b))
             {
-                int target = -1;
-                if      (X > b.X2) target = nb.R;
-                else if (X < b.X1) target = nb.L;
-                else if (Y > b.Y2) target = nb.U;
-                else if (Y < b.Y1) target = nb.D;
-                if (target != -1) { SendZoneTransfer(target); continue; }
+                if      (X > b.X2) { X = b.X2; vx = -Math.Abs(vx); }
+                else if (X < b.X1) { X = b.X1; vx =  Math.Abs(vx); }
+                if      (Y > b.Y2) { Y = b.Y2; vy = -Math.Abs(vy); }
+                else if (Y < b.Y1) { Y = b.Y1; vy =  Math.Abs(vy); }
             }
 
             if (_rng.NextDouble() < 0.05) vx = RandomVelocity();
@@ -276,6 +252,11 @@ public class BotClient
                         if (rtt < _mvMin) _mvMin = rtt;
                         if (rtt > _mvMax) _mvMax = rtt;
                     }
+                    break;
+
+                case 0x0003: // SpawnResponse
+                    var sr = SpawnResponse.Parser.ParseFrom(body);
+                    ZoneId = sr.ZoneId; X = sr.X; Y = sr.Y;
                     break;
 
                 case 0x0108: // ZoneTransferResponse

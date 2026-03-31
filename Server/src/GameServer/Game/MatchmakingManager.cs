@@ -19,7 +19,7 @@ public class MatchmakingManager
     };
 
     public const int LobbyZoneId = 10;
-    public static readonly (float X, float Y) LobbySpawn = (-740f, 600f);
+    public static readonly (float X, float Y) LobbySpawn = (-740f, 320f);
 
     private readonly ConcurrentQueue<PlayerSession> _queue = new();
     private readonly ConcurrentDictionary<int, (PlayerSession P1, PlayerSession P2)> _activeMatches = new(); // zoneId → match
@@ -72,6 +72,10 @@ public class MatchmakingManager
 
     private void MoveToArena(PlayerSession ps, int arenaId, float spawnX, float spawnY, int opponentId)
     {
+        // 로비에서 퇴장 브로드캐스트
+        _zones.GetOrCreate(ps.ZoneId).Broadcast(PacketType.PlayerLeave,
+            new GameProto.PlayerLeave { PlayerId = ps.PlayerId });
+
         _zones.Enter(ps, arenaId);
         ps.X = spawnX;
         ps.Y = spawnY;
@@ -123,6 +127,11 @@ public class MatchmakingManager
         ps.X = LobbySpawn.X;
         ps.Y = LobbySpawn.Y;
         _zones.Enter(ps, LobbyZoneId);
+
+        // 로비 입장 브로드캐스트
+        _zones.GetOrCreate(LobbyZoneId).Broadcast(PacketType.PlayerEnter,
+            new GameProto.PlayerEnter { PlayerId = ps.PlayerId, Username = ps.Username, X = ps.X, Y = ps.Y },
+            excludePlayerId: ps.PlayerId);
 
         ps.Connection.Send(PacketType.ZoneTransferResponse, new ZoneTransferResponse
         {
