@@ -23,24 +23,26 @@ var botTasks = bots.Select(async (bot, i) =>
     await bot.RunAsync(cts.Token);
 });
 
-// 라이브 진행 상황 (10초마다) — RTT 위주
+// 라이브 진행 상황 (10초마다)
 var liveTask = Task.Run(async () =>
 {
     while (!cts.Token.IsCancellationRequested)
     {
         try { await Task.Delay(10_000, cts.Token); } catch { break; }
-        int elapsed = (int)sw.Elapsed.TotalSeconds;
+        int elapsed   = (int)sw.Elapsed.TotalSeconds;
         int connected = bots.Count(b => b.Connected);
+        int inMatch   = bots.Count(b => b.Connected && b.ZoneId != 10);
+        int inLobby   = bots.Count(b => b.Connected && b.ZoneId == 10);
+        int failed    = bots.Count(b => b.AuthFailed);
 
-        long mvAvg = Avg(bots.Select(b => b.MvAvg));
-        long ztAvg = Avg(bots.Select(b => b.ZtAvg));
+        long mvAvg  = Avg(bots.Select(b => b.MvAvg));
+        long mvP95  = P95(bots);
         long chatAvg = Avg(bots.Select(b => b.ChatAvg));
+        int  matches = bots.Sum(b => b.MatchesPlayed);
 
-        long ztReq = bots.Sum(b => b.ZoneTransfersSent);
-        long ztRes = bots.Sum(b => b.ZoneTransferResponsesReceived);
-        double ztRate = ztReq > 0 ? ztRes * 100.0 / ztReq : 100;
-
-        Console.WriteLine($"[{elapsed,3}s] bots={connected}/{BotCount}  move={mvAvg}ms  zt={ztAvg}ms  chat={chatAvg}ms  ztOK={ztRes}/{ztReq}({ztRate:F1}%)");
+        Console.WriteLine(
+            $"[{elapsed,3}s] conn={connected}/{BotCount}  lobby={inLobby}  arena={inMatch}  failed={failed}" +
+            $"  move={mvAvg}ms(p95={mvP95}ms)  chat={chatAvg}ms  matches={matches}");
     }
 });
 
@@ -50,57 +52,59 @@ catch (OperationCanceledException) { }
 sw.Stop();
 
 // ── 최종 리포트 ──────────────────────────────────────────────
-long sumMoveReq = bots.Sum(b => b.MoveRequestsSent);
-long sumZTReq = bots.Sum(b => b.ZoneTransfersSent);
-long sumZTRes = bots.Sum(b => b.ZoneTransferResponsesReceived);
-long sumChatReq = bots.Sum(b => b.ChatRequestsSent);
-double totalZTRate = sumZTReq > 0 ? sumZTRes * 100.0 / sumZTReq : 100;
-int connectedCount = bots.Count(b => b.Connected);
+var active  = bots.Where(b => !b.AuthFailed).ToList();
+var failed  = bots.Where(b => b.AuthFailed).ToList();
+
+long gMvAvg  = Avg(active.Select(b => b.MvAvg));
+long gMvMin  = active.Where(b => b.MvMin > 0).Select(b => b.MvMin).DefaultIfEmpty(0).Min();
+long gMvMax  = active.Select(b => b.MvMax).DefaultIfEmpty(0).Max();
+long gMvP95  = P95(active);
+long gChatAvg = Avg(active.Select(b => b.ChatAvg));
+long gChatMin = active.Where(b => b.ChatMin > 0).Select(b => b.ChatMin).DefaultIfEmpty(0).Min();
+long gChatMax = active.Select(b => b.ChatMax).DefaultIfEmpty(0).Max();
+int  gMatches = active.Sum(b => b.MatchesPlayed);
+int  gWins    = active.Sum(b => b.Wins);
+int  gDeaths  = active.Sum(b => b.Deaths);
 
 Console.WriteLine();
-Console.WriteLine($"=== TEST RESULTS  bots={BotCount}  elapsed={sw.Elapsed.TotalSeconds:F1}s ===");
+Console.WriteLine($"╔══════════════════════════════════════════════════════════════════════════╗");
+Console.WriteLine($"║  TEST RESULTS   bots={BotCount}   elapsed={sw.Elapsed.TotalSeconds:F1}s   auth_ok={active.Count}  auth_fail={failed.Count}");
+Console.WriteLine($"╠══════════════════════════════════════════════════════════════════════════╣");
 Console.WriteLine();
 
-// 지연률 테이블
-Console.WriteLine($"{"Bot",-8} {"Conn",-5} {"Mv avg/min/max",16} {"ZT avg/min/max",16} {"Ch avg/min/max",16} {"ZTRate",8}");
-Console.WriteLine(new string('-', 75));
+// 지연 테이블
+Console.WriteLine($"{"Bot",-8} {"Conn",-6} {"Mv avg/p95/max",18} {"Ch avg/max",14} {"Matches",8} {"W/D",8}");
+Console.WriteLine(new string('─', 68));
 
 foreach (var bot in bots.OrderBy(b => b.BotId))
 {
-    double ztRate = bot.ZoneTransfersSent > 0 ? bot.ZoneTransferResponsesReceived * 100.0 / bot.ZoneTransfersSent : 100;
-    string conn = bot.Connected ? "OK" : "FAIL";
-    string mv = $"{bot.MvAvg}/{bot.MvMin}/{bot.MvMax}ms";
-    string zt = $"{bot.ZtAvg}/{bot.ZtMin}/{bot.ZtMax}ms";
-    string chat = $"{bot.ChatAvg}/{bot.ChatMin}/{bot.ChatMax}ms";
-    Console.WriteLine($"Bot{bot.BotId,-5} {conn,-5} {mv,16} {zt,16} {chat,16} {ztRate,7:F1}%");
+    string conn = bot.AuthFailed ? "FAIL" : "OK";
+    string mv   = bot.AuthFailed ? "-" : $"{bot.MvAvg}/{bot.MvP95}/{bot.MvMax}ms";
+    string ch   = bot.AuthFailed ? "-" : $"{bot.ChatAvg}/{bot.ChatMax}ms";
+    string wd   = bot.AuthFailed ? "-" : $"{bot.Wins}/{bot.Deaths}";
+    Console.WriteLine($"Bot{bot.BotId,-5} {conn,-6} {mv,18} {ch,14} {bot.MatchesPlayed,8} {wd,8}");
 }
 
-Console.WriteLine(new string('-', 75));
+Console.WriteLine(new string('─', 68));
+Console.WriteLine($"{"TOTAL",-8} {active.Count + "/" + BotCount,-6} {$"{gMvAvg}/{gMvP95}/{gMvMax}ms",18} {$"{gChatAvg}/{gChatMax}ms",14} {gMatches,8} {$"{gWins}/{gDeaths}",8}");
 
-long gMvAvg = Avg(bots.Select(b => b.MvAvg));
-long gMvMin = bots.Where(b => b.MvMin > 0).Select(b => b.MvMin).DefaultIfEmpty(0).Min();
-long gMvMax = bots.Select(b => b.MvMax).DefaultIfEmpty(0).Max();
-long gZtAvg = Avg(bots.Select(b => b.ZtAvg));
-long gZtMin = bots.Where(b => b.ZtMin > 0).Select(b => b.ZtMin).DefaultIfEmpty(0).Min();
-long gZtMax = bots.Select(b => b.ZtMax).DefaultIfEmpty(0).Max();
-long gChatAvg = Avg(bots.Select(b => b.ChatAvg));
-long gChatMin = bots.Where(b => b.ChatMin > 0).Select(b => b.ChatMin).DefaultIfEmpty(0).Min();
-long gChatMax = bots.Select(b => b.ChatMax).DefaultIfEmpty(0).Max();
-
-string gmv = $"{gMvAvg}/{gMvMin}/{gMvMax}ms";
-string gzt = $"{gZtAvg}/{gZtMin}/{gZtMax}ms";
-string gchat = $"{gChatAvg}/{gChatMin}/{gChatMax}ms";
-Console.WriteLine($"{"TOTAL",-8} {connectedCount + "/" + BotCount,-5} {gmv,16} {gzt,16} {gchat,16} {totalZTRate,7:F1}%");
-
-// 패킷 전송률 요약
 Console.WriteLine();
-Console.WriteLine("=== PACKET RATES ===");
-Console.WriteLine($"ZoneTransfer : {totalZTRate:F2}%  (loss {100 - totalZTRate:F2}%)");
-Console.WriteLine($"Connected    : {connectedCount}/{BotCount}");
-Console.WriteLine($"Move sent    : {sumMoveReq}  Chat sent: {sumChatReq}");
+Console.WriteLine($"╠══════════════════════════════════════════════════════════════════════════╣");
+Console.WriteLine($"║  SUMMARY");
+Console.WriteLine($"║  Move RTT   avg={gMvAvg}ms  p95={gMvP95}ms  min={gMvMin}ms  max={gMvMax}ms");
+Console.WriteLine($"║  Chat RTT   avg={gChatAvg}ms  min={gChatMin}ms  max={gChatMax}ms");
+Console.WriteLine($"║  Matches    total={gMatches}  wins={gWins}  deaths={gDeaths}");
+Console.WriteLine($"║  Auth       ok={active.Count}  fail={failed.Count}");
+Console.WriteLine($"╚══════════════════════════════════════════════════════════════════════════╝");
 
 static long Avg(IEnumerable<long> values)
 {
     var nonZero = values.Where(v => v > 0).ToList();
     return nonZero.Count > 0 ? nonZero.Sum() / nonZero.Count : 0;
+}
+
+static long P95(IEnumerable<BotClient> bots)
+{
+    var samples = bots.SelectMany(b => b.MvP95 > 0 ? [b.MvP95] : Array.Empty<long>()).Order().ToList();
+    return samples.Count > 0 ? samples[(int)(samples.Count * 0.95)] : 0;
 }

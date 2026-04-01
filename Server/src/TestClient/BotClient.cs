@@ -9,6 +9,8 @@ namespace TestClient;
 
 public class BotClient
 {
+    private static readonly SemaphoreSlim _authSemaphore = new(5, 5);
+
     // 3x3 그리드: Zone1 Zone2 Zone3 / Zone4 Zone5 Zone6 / Zone7 Zone8 Zone9
     private static readonly Dictionary<int, (float X1, float X2, float Y1, float Y2)> ZoneBounds = new()
     {
@@ -62,21 +64,27 @@ public class BotClient
 
     // Move RTT
     private long _mvSum, _mvCount, _mvMin = long.MaxValue, _mvMax;
+    private readonly List<long> _mvSamples = new();
     public long MvAvg => _mvCount > 0 ? _mvSum / _mvCount : 0;
     public long MvMin => _mvCount > 0 ? _mvMin : 0;
     public long MvMax => _mvMax;
-
-    // ZoneTransfer RTT
-    private long _ztSum, _ztCount, _ztMin = long.MaxValue, _ztMax;
-    public long ZtAvg => _ztCount > 0 ? _ztSum / _ztCount : 0;
-    public long ZtMin => _ztCount > 0 ? _ztMin : 0;
-    public long ZtMax => _ztMax;
+    public long MvP95 { get {
+        if (_mvSamples.Count == 0) return 0;
+        var s = _mvSamples.Order().ToList();
+        return s[(int)(s.Count * 0.95)];
+    }}
 
     // Chat RTT
     private long _chatSum, _chatCount, _chatMin = long.MaxValue, _chatMax;
     public long ChatAvg => _chatCount > 0 ? _chatSum / _chatCount : 0;
     public long ChatMin => _chatCount > 0 ? _chatMin : 0;
     public long ChatMax => _chatMax;
+
+    // 매치 지표
+    public int MatchesPlayed { get; private set; }
+    public int Wins { get; private set; }
+    public int Deaths { get; private set; }
+    public bool AuthFailed { get; private set; }
 
     public BotClient(int botId, string host, int port)
     {
@@ -92,7 +100,12 @@ public class BotClient
         try
         {
             // HTTP 회원가입/로그인으로 JWT 획득 후 TCP 연결
-            await RegisterAsync(ct);  // 이미 있으면 서버가 무시
+            await _authSemaphore.WaitAsync(ct);
+            try
+            {
+                await RegisterAsync(ct);  // 이미 있으면 서버가 무시
+            }
+            finally { _authSemaphore.Release(); }
 
             _client = new TcpClient();
             await _client.ConnectAsync(_host, _port, ct);
@@ -103,11 +116,14 @@ public class BotClient
             bool authed = false;
             for (int attempt = 0; attempt < 5; attempt++)
             {
-                if (await LoginAsync(ct)) { authed = true; break; }
+                await _authSemaphore.WaitAsync(ct);
+                try { if (await LoginAsync(ct)) { authed = true; break; } }
+                finally { _authSemaphore.Release(); }
                 await Task.Delay(2000 * (attempt + 1), ct);
             }
             if (!authed)
             {
+                AuthFailed = true;
                 Console.WriteLine($"[Bot{BotId}] Auth failed");
                 return;
             }
@@ -225,14 +241,6 @@ public class BotClient
         Send(0x0107, new ZoneTransferRequest { TargetZoneId = targetZoneId }.ToByteArray());
     }
 
-    private void RecordZtRtt()
-    {
-        if (_ztSentAt == 0) return;
-        long rtt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _ztSentAt;
-        _ztSum += rtt; _ztCount++;
-        if (rtt < _ztMin) _ztMin = rtt;
-        if (rtt > _ztMax) _ztMax = rtt;
-    }
 
     // ── 수신 루프 ────────────────────────────────────────────────────────────
 
@@ -250,6 +258,7 @@ public class BotClient
                     {
                         long rtt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - mvSentAt;
                         _mvSum += rtt; _mvCount++;
+                        _mvSamples.Add(rtt);
                         if (rtt < _mvMin) _mvMin = rtt;
                         if (rtt > _mvMax) _mvMax = rtt;
                     }
@@ -264,8 +273,6 @@ public class BotClient
                     var ztr = ZoneTransferResponse.Parser.ParseFrom(body);
                     if (ztr.Success)
                     {
-                        RecordZtRtt();
-                        ZoneTransferResponsesReceived++;
                         ZoneId = ztr.ZoneId;
                         X = ztr.SpawnX;
                         Y = ztr.SpawnY;
@@ -279,15 +286,18 @@ public class BotClient
                     ZoneId = ms.ZoneId;
                     X = ms.SpawnX; Y = ms.SpawnY;
                     IsDead = false;
+                    MatchesPlayed++;
                     break;
 
-                case 0x0406: // MatchEnded — 랜덤 시간 후 재매칭
+                case 0x0406: // MatchEnded
+                    var me = MatchEnded.Parser.ParseFrom(body);
+                    if (me.WinnerId == PlayerId) Wins++;
                     _ = RequestMatchAfterDelayAsync(ct);
                     break;
 
                 case 0x0306: // DeathResponse
                     var dr = DeathResponse.Parser.ParseFrom(body);
-                    if (dr.DeadPlayerId == PlayerId) IsDead = true;
+                    if (dr.DeadPlayerId == PlayerId) { IsDead = true; Deaths++; }
                     break;
 
                 case 0x0308: // RespawnResponse
