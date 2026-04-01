@@ -69,9 +69,11 @@ public class BotClient
     public long MvMin => _mvCount > 0 ? _mvMin : 0;
     public long MvMax => _mvMax;
     public long MvP95 { get {
-        if (_mvSamples.Count == 0) return 0;
-        var s = _mvSamples.Order().ToList();
-        return s[(int)(s.Count * 0.95)];
+        long[] snap;
+        lock (_mvSamples) snap = _mvSamples.ToArray();
+        if (snap.Length == 0) return 0;
+        Array.Sort(snap);
+        return snap[(int)(snap.Length * 0.95)];
     }}
 
     // Chat RTT
@@ -258,7 +260,7 @@ public class BotClient
                     {
                         long rtt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - mvSentAt;
                         _mvSum += rtt; _mvCount++;
-                        _mvSamples.Add(rtt);
+                        lock (_mvSamples) _mvSamples.Add(rtt);
                         if (rtt < _mvMin) _mvMin = rtt;
                         if (rtt > _mvMax) _mvMax = rtt;
                     }
