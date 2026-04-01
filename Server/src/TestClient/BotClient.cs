@@ -15,6 +15,7 @@ public class BotClient
         [1] = (-140f, 140f, 460f, 740f), [2] = (160f, 440f, 460f, 740f), [3] = (460f, 740f, 460f, 740f),
         [4] = (-140f, 140f, 160f, 440f), [5] = (160f, 440f, 160f, 440f), [6] = (460f, 740f, 160f, 440f),
         [7] = (-140f, 140f,-140f, 140f), [8] = (160f, 440f,-140f, 140f), [9] = (460f, 740f,-140f, 140f),
+        [10] = (-1160f, -320f, -100f, 740f),
     };
     private static readonly Dictionary<int, (int R, int L, int U, int D)> Neighbors = new()
     {
@@ -268,6 +269,7 @@ public class BotClient
                         ZoneId = ztr.ZoneId;
                         X = ztr.SpawnX;
                         Y = ztr.SpawnY;
+                        IsDead = false;
                         Send(0x0103, Array.Empty<byte>());
                     }
                     break;
@@ -276,6 +278,7 @@ public class BotClient
                     var ms = MatchStarted.Parser.ParseFrom(body);
                     ZoneId = ms.ZoneId;
                     X = ms.SpawnX; Y = ms.SpawnY;
+                    IsDead = false;
                     break;
 
                 case 0x0406: // MatchEnded — 랜덤 시간 후 재매칭

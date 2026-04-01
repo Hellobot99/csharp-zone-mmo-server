@@ -139,6 +139,8 @@ public class MatchmakingManager
             new GameProto.PlayerLeave { PlayerId = ps.PlayerId });
 
         ps.Hp = ps.MaxHp;
+        ps.IsInvincible = true;
+        _ = Task.Delay(3000).ContinueWith(_ => ps.IsInvincible = false);
         ps.X = LobbySpawn.X;
         ps.Y = LobbySpawn.Y;
         _zones.Enter(ps, LobbyZoneId);
