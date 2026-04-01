@@ -40,4 +40,27 @@ public class Zone
                 obs.Connection.Send(packet);
             }
     }
+
+    /// <summary>
+    /// AOI 브로드캐스트: range 이내 플레이어에게만 전송.
+    /// Observers는 AOI 제한 없이 항상 수신.
+    /// </summary>
+    public void BroadcastNearby(float x, float y, float range, byte[] packet, int? excludePlayerId = null)
+    {
+        float rangeSq = range * range;
+        foreach (var (id, ps) in _players)
+        {
+            if (id == excludePlayerId) continue;
+            float dx = ps.X - x;
+            float dy = ps.Y - y;
+            if (dx * dx + dy * dy <= rangeSq)
+                ps.Connection.Send(packet);
+        }
+        if (Observers != null)
+            foreach (var (id, obs) in Observers)
+            {
+                if (id == excludePlayerId) continue;
+                obs.Connection.Send(packet);
+            }
+    }
 }

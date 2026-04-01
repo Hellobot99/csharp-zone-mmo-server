@@ -12,6 +12,7 @@ public sealed class MovePacketHandler : IPacketHandler
 
     private const float AttackRangeSq = 12f * 12f;  // 거리 12 이하면 공격
     private const int AttackCooldownMs = 500;
+    private const float AoiRange = 150f;  // AOI 브로드캐스트 범위
 
     public MovePacketHandler(SessionManager sessions, ZoneManager zones, MatchmakingManager matchmaking)
     {
@@ -34,10 +35,10 @@ public sealed class MovePacketHandler : IPacketHandler
 
         var zone = _zones.GetOrCreate(ps.ZoneId);
 
-        // 이동 브로드캐스트
+        // 이동 브로드캐스트 (AOI: 300 유닛 이내에만)
         var movePacket = PacketHelper.Build(PacketType.MoveResponse,
             new MoveResponse { PlayerId = ps.PlayerId, X = request.X, Y = request.Y, Z = request.Z });
-        zone.Broadcast(movePacket, excludePlayerId: ps.PlayerId);
+        zone.BroadcastNearby(request.X, request.Y, AoiRange, movePacket, excludePlayerId: ps.PlayerId);
         session.Send(movePacket);
 
         // 전투 체크
