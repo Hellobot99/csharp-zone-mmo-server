@@ -2,7 +2,9 @@
 
 C#/.NET 8로 만든 존(Zone) 방식 MMO 서버입니다. `SocketAsyncEventArgs`(Windows에서는
 IOCP로 동작) 기반 TCP 실시간 게임 서버와, JWT 인증을 처리하는 ASP.NET Core HTTP API를
-같은 프로세스에서 호스팅 서비스로 함께 띄웁니다.
+같은 프로세스에서 호스팅 서비스로 함께 띄웁니다. 로비에서 대기열에 들어가면 4인
+매칭 → 아레나 존에서 최후의 1인을 가리는 PvP → 결과에 따라 다시 로비, 흐름을 갖춘
+실시간 전투 MMO입니다.
 
 ## 왜 이 프로젝트인가
 
@@ -14,7 +16,7 @@ IOCP로 동작) 기반 TCP 실시간 게임 서버와, JWT 인증을 처리하�
 재사용, 백프레셔)를 C#에서 어떻게 푸는지 비교해볼 수 있습니다.
 
 또한 세 프로젝트 모두 **"실시간은 TCP, 트랜잭션은 HTTP"** 로 계층을 분리하는 패턴을
-일관되게 적용했습니다 (이동/채팅/존이동은 TCP, 로그인/회원가입은 JWT 발급 HTTP API).
+일관되게 적용했습니다 (이동/전투/매칭은 TCP, 로그인/회원가입은 JWT 발급 HTTP API).
 
 ## 기술 스택
 | 구분 | 내용 |
@@ -28,27 +30,42 @@ IOCP로 동작) 기반 TCP 실시간 게임 서버와, JWT 인증을 처리하�
 ## 아키텍처
 ```
 GameServerHostedService (ASP.NET Core Hosted Service로 TcpServer 구동)
- ├─ TcpServer        : SAEA 기반 accept/receive 루프, BufferManager+SAEAPool로 재사용
- ├─ SessionManager    : 접속 중인 PlayerSession registry
- ├─ PacketHandlerManager : 패킷 타입 → 핸들러 라우팅 (Move/Chat/Skill/ZoneTransfer/Ping...)
- ├─ ZoneManager/Zone  : 3x3 그리드로 나뉜 존. 존 하나 = 플레이어 집합 + 브로드캐스트
- └─ HeartbeatService  : 별도 호스티드 서비스로 접속 상태 점검
+ ├─ TcpServer         : SAEA 기반 accept/receive 루프, BufferManager+SAEAPool로 재사용
+ ├─ SessionManager     : 접속 중인 PlayerSession registry
+ ├─ PacketHandlerManager : 패킷 타입 → 핸들러 라우팅
+ │   (Move/Chat/Skill/ZoneTransfer/Matchmake/Ping...)
+ ├─ ZoneManager/Zone   : 로비 1개 + 3x3 아레나(존 9개). 존 하나 = 플레이어 집합 +
+ │                        AOI 브로드캐스트
+ ├─ MatchmakingManager : 대기열 → 4인 매칭 → 빈 아레나 배정 → 30초 타임아웃/승패 판정
+ └─ HeartbeatService   : 별도 호스티드 서비스로 접속 상태 점검
 
 AuthController(HTTP, 8080)  : 회원가입/로그인 → JWT 발급 (MySQL/EF Core)
 TcpAuthHandler(TCP, 7000)   : 접속 직후 JWT를 검증해 세션을 인증 상태로 전환
 ```
+
+## 매치메이킹 + PvP 아레나
+로비(존 10번)에서 매칭 요청을 보내면 대기열에 들어가고, 4명이 모이면 9개 아레나 존
+중 비어있는 곳에 배정돼 동시에 여러 매치가 병렬로 돌아간다. 아레나 안에서는:
+- 이동 중 공격 판정(사거리 내 상대 자동 공격, 쿨다운 있음), 데미지 적용, 체력 0 시
+  사망 처리
+- 스폰/리스폰 직후 3초 무적 시간
+- 최후의 1인이 남으면 승리 처리 → 3초 뒤 전원 로비로 복귀 → 즉시 다음 매칭 시도
+- 매치가 30초 안에 안 끝나면 강제 종료(타임아웃)
+- 매치 중 플레이어가 접속을 끊으면 남은 인원 기준으로 승패를 재계산
+
+## AOI(관심 영역) 브로드캐스트
+`Zone.Broadcast`는 존 전체에 패킷을 뿌리지만, 이동처럼 빈번한 패킷은
+`Zone.BroadcastNearby`로 **좌표 기준 반경(150 유닛) 이내의 플레이어에게만** 보낸다.
+존 단위로 한 번 걸러내고, 그 안에서 다시 거리로 걸러내는 2단계 구조라 존이 커지거나
+인원이 몰려도 불필요한 패킷 전송을 줄인다.
 
 ## 프로토콜
 - `proto/auth.proto`, `proto/game.proto` — Protocol Buffers로 정의.
 - 와이어 포맷: `[size(2B)][type(2B)][protobuf body]` — C++ IOCP 프로젝트와 동일하게
   헤더+바디 구조를 직접 파싱한다 (자체 프레이밍, 프레임워크 의존 없음).
 - 흐름: `POST /api/auth/register` → `POST /api/auth/login`(JWT 발급) → TCP 접속 →
-  `TcpAuthRequest`(JWT 원문 전송)로 세션 인증 → 이동/채팅/존이동/스킬 패킷 송수신.
-
-## 존(Zone) 시스템
-맵을 3×3 그리드(존 9개)로 나누고, 플레이어가 존 경계를 넘으면 `ZoneTransferRequest`로
-인접 존으로 옮겨간다. 브로드캐스트는 같은 존에 있는 플레이어(+ 관전자)에게만 나간다 —
-전체 브로드캐스트 대신 관심 영역(AOI)을 존 단위로 거칠게 나눈 구조.
+  `TcpAuthRequest`(JWT 원문 전송)로 세션 인증 → 로비에서 매칭 요청 →
+  `MatchStarted` 수신 시 아레나로 이동 → 이동/공격/`MatchEnded`.
 
 ## 빌드 및 실행
 ```bash
@@ -60,9 +77,10 @@ docker compose up --build -d
 `docker compose up --build -d gameserver`로 자동 재배포한다 (MySQL/Redis 데이터는 유지).
 
 ## 부하테스트 도구
-`Server/src/TestClient`에 봇 클라이언트가 있다. 봇마다 랜덤 방향으로 계속 움직이면서
-존 경계를 넘으면 자동으로 `ZoneTransferRequest`를 보내고, 이동(Move)/존이동(ZoneTransfer)/
-채팅(Chat) 각각의 RTT(평균/최소/최대)를 봇별·전체로 집계해서 리포트를 낸다.
+`Server/src/TestClient`에 봇 클라이언트가 있다. 로그인 후 로비에서 매칭 요청을
+반복하며 실제 매치메이킹 → 아레나 이동 → 매치 종료 → 재매칭 흐름을 그대로 타고,
+이동(Move)/존이동(ZoneTransfer)/채팅(Chat) 각각의 RTT(평균/최소/최대)와 플레이한
+매치 수를 봇별·전체로 집계해서 리포트를 낸다.
 ```bash
 cd Server/src/TestClient
 dotnet run -- 100   # 봇 100개, 120초
@@ -74,18 +92,18 @@ dotnet run -- 100   # 봇 100개, 120초
 ```
 Server/src/GameServer/
  ├─ Network/     TcpServer, TcpSession, SAEAPool, BufferManager
- ├─ Packets/     PacketHandlerManager + 핸들러들(Move/Chat/Skill/ZoneTransfer/Ping/...)
- ├─ Game/        Zone, ZoneManager, SessionManager, PlayerSession
+ ├─ Packets/     PacketHandlerManager + 핸들러들(Move/Chat/Skill/ZoneTransfer/Matchmake/Ping/...)
+ ├─ Game/        Zone, ZoneManager, MatchmakingManager, SessionManager, PlayerSession
  ├─ Api/         AuthController(HTTP), AuthService
  ├─ Database/    GameDbContext(EF Core), PlayerRepository
  └─ Cache/       RedisService
-Server/src/TestClient/   부하테스트용 봇 클라이언트
+Server/src/TestClient/   부하테스트용 봇 클라이언트 (매칭까지 자동으로 태움)
 proto/                    공용 패킷 정의
 ```
 
 ## 알려진 제약사항 / 향후 개선 방향
-- 전투(`SkillPacketHandler`)는 아직 자기 자신의 공격력을 올리고 브로드캐스트하는
-  수준의 최소 구현이다 — 대상 판정/데미지 적용 등은 미구현.
+- 공격은 이동 시 사거리 내 상대를 자동으로 때리는 근접 판정만 있다 — 스킬별
+  사거리/투사체/범위 공격 등은 아직 없음.
 - 클라이언트(Unity) 쪽 리소스는 실제 아트 대신 도형(구체 등)으로 대체돼 있다 —
   기능 검증 위주로 만든 프로젝트라 완성도보다 구조에 집중했다.
 - 부하테스트는 도구만 만들어두고 아직 정식으로 돌려서 결과를 기록하지 않았다.
