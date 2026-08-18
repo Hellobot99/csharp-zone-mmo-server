@@ -20,6 +20,8 @@ public sealed class EnterGameHandler : IPacketHandler
         var ps = _sessions.Get(session.SessionId);
         if (ps is null || ps.IsObserver) return Task.CompletedTask;
 
+        session.Send(PacketType.SpawnResponse, new SpawnResponse { X = ps.X, Y = ps.Y, ZoneId = ps.ZoneId });
+
         var zone = _zones.GetOrCreate(ps.ZoneId);
         zone.Broadcast(PacketType.PlayerEnter,
             new PlayerEnter { PlayerId = ps.PlayerId, Username = ps.Username, X = ps.X, Y = ps.Y },

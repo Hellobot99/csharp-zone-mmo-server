@@ -107,6 +107,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LocalPlayer
   moveSpeed: 5
   sendInterval: 0.1
+  _label: {fileID: 0}
 --- !u!50 &-4225388170391065798
 Rigidbody2D:
   serializedVersion: 5

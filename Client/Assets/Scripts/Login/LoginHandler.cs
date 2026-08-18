@@ -63,20 +63,39 @@ public class LoginHandler : MonoBehaviour
         NetworkManager.Instance.Send(PacketType.TcpAuthRequest, jwtBytes);
     }
 
+    private int _authRetryCount;
+
     private void OnTcpAuthResponse(byte[] body)
     {
         var resp = LoginResponse.Parser.ParseFrom(body);
         if (resp.Success)
         {
+            _authRetryCount = 0;
             Debug.Log($"[LoginHandler] TCP auth OK. Entering game...");
             SceneManager.LoadScene("TownScene");
         }
+        else if (resp.Token == "Already logged in" && _authRetryCount < 5)
+        {
+            _authRetryCount++;
+            Debug.LogWarning($"[LoginHandler] Already logged in – retrying ({_authRetryCount}/5)...");
+            NetworkManager.Instance.Disconnect();
+            StartCoroutine(RetryTcpAuth());
+        }
         else
         {
+            _authRetryCount = 0;
             Debug.LogWarning($"[LoginHandler] TCP auth failed: {resp.Token}");
             _loginUI?.ShowError(resp.Token);
             NetworkManager.Instance.Disconnect();
         }
+    }
+
+    private IEnumerator RetryTcpAuth()
+    {
+        yield return new WaitForSeconds(2f);
+        NetworkManager.Instance.Connect();
+        yield return new WaitUntil(() => NetworkManager.Instance.IsConnected);
+        NetworkManager.Instance.Send(PacketType.TcpAuthRequest, Encoding.UTF8.GetBytes(Token));
     }
 
     private static string TryParseError(string json)

@@ -24,20 +24,11 @@ public sealed class SkillPacketHandler : IPacketHandler
         if (ps is null || ps.IsDead) return Task.CompletedTask;
 
         // 쿨다운 체크
-        if ((DateTime.UtcNow - ps.LastAttackTime).TotalMilliseconds < CooldownMs)
+        if ((DateTime.UtcNow - ps.LastSkillTime).TotalMilliseconds < CooldownMs)
             return Task.CompletedTask;
 
-        ps.LastAttackTime = DateTime.UtcNow;
+        ps.LastSkillTime = DateTime.UtcNow;
         ps.Atk += 1;
-        ps.ColorIndex += 1;
-
-        var zone = _zones.GetOrCreate(ps.ZoneId);
-        zone.Broadcast(PacketType.SkillResponse, new SkillResponse
-        {
-            PlayerId = ps.PlayerId,
-            ColorIndex = ps.ColorIndex,
-            Atk = ps.Atk,
-        });
 
         return Task.CompletedTask;
     }

@@ -12,6 +12,7 @@ public enum PacketType : ushort
     // After receiving a JWT from the API, the client connects via TCP and sends TcpAuthRequest.
     TcpAuthRequest = 0x0001,
     TcpAuthResponse = 0x0002,
+    SpawnResponse = 0x0003,
 
     // ── Heartbeat ─────────────────────────────────────────────────────────────
     Ping = 0x0011,
@@ -36,5 +37,11 @@ public enum PacketType : ushort
     DamageResponse = 0x0304,
     DeathResponse = 0x0306,
     RespawnResponse = 0x0308,
+
+    // ── Matchmaking ───────────────────────────────────────────────────────────
+    MatchmakeRequest  = 0x0401,
+    MatchmakeResponse = 0x0402,
+    MatchStarted      = 0x0404,
+    MatchEnded        = 0x0406,
 
 }

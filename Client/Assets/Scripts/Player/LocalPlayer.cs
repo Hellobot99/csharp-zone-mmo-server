@@ -35,8 +35,48 @@ public class LocalPlayer : MonoBehaviour
         return inputField != null && inputField.isFocused;
     }
 
+    public bool IsDead { get; private set; }
+
+    public void FlashDamage()
+    {
+        if (!IsDead) StartCoroutine(DamageFlash());
+    }
+
+    private System.Collections.IEnumerator DamageFlash()
+    {
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr != null) sr.color = Color.red;
+        yield return new WaitForSeconds(0.2f);
+        if (!IsDead && sr != null) sr.color = Color.white;
+    }
+
+    public void OnDeath()
+    {
+        IsDead = true;
+        StopAllCoroutines();
+        _rb.linearVelocity = Vector2.zero;
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr != null) sr.color = new Color(0.3f, 0.3f, 0.3f);
+    }
+
+    public void OnRespawn(float _, float __)
+    {
+        IsDead = false;
+        StartCoroutine(RespawnFlash());
+    }
+
+    private System.Collections.IEnumerator RespawnFlash()
+    {
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr != null) sr.color = Color.green;
+        yield return new WaitForSeconds(2.5f);
+        if (sr != null) sr.color = Color.white;
+    }
+
     private void HandleMovement()
     {
+        if (IsDead) return;
+
         var kb = Keyboard.current;
         if (kb == null) return;
 

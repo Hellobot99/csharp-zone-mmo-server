@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
 using System.Net.Sockets;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 namespace GameServer.Network;
@@ -16,7 +16,7 @@ namespace GameServer.Network;
 ///
 /// Send path:
 ///   Callers enqueue byte[] payloads.  A lock-free flag (_isSending) ensures only
-///   one send operation is in flight at a time; remaining items drain in ProcessSend.
+///   Packets are written to an unbounded Channel; a dedicated SendLoopAsync drains it.
 /// </summary>
 public sealed class TcpSession : IClientSession
 {
@@ -32,10 +32,9 @@ public sealed class TcpSession : IClientSession
     private readonly byte[] _assemblyBuffer = new byte[AssemblyBufferSize];
     private int _assemblyPos;
 
-    // Send – serialised via _isSending (0 = idle, 1 = in-flight)
-    private readonly ConcurrentQueue<byte[]> _sendQueue = new();
-    private readonly SocketAsyncEventArgs _sendSAEA;
-    private int _isSending;
+    // Send – dedicated writer loop via Channel
+    private readonly Channel<byte[]> _sendChannel = Channel.CreateUnbounded<byte[]>(
+        new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
 
     // Connection state
     private int _isConnected = 1; // 1 = connected
@@ -61,23 +60,22 @@ public sealed class TcpSession : IClientSession
         _logger = logger;
         SessionId = socket.GetHashCode();
 
-        _sendSAEA = new SocketAsyncEventArgs();
-        _sendSAEA.Completed += OnSendCompleted;
-        _sendSAEA.UserToken = this;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     public void Start()
     {
+        _ = SendLoopAsync();
         if (!_socket.ReceiveAsync(ReceiveSAEA))
             ProcessReceive(ReceiveSAEA);
     }
 
     public void Close()
     {
-        if (Interlocked.CompareExchange(ref _isConnected, 0, 1) != 1) return; // already closed
+        if (Interlocked.CompareExchange(ref _isConnected, 0, 1) != 1) return;
 
+        _sendChannel.Writer.TryComplete();
         try { _socket.Shutdown(SocketShutdown.Both); } catch { }
         try { _socket.Close(); } catch { }
 
@@ -165,53 +163,27 @@ public sealed class TcpSession : IClientSession
     public void Send(byte[] data)
     {
         if (!IsConnected) return;
-        _sendQueue.Enqueue(data);
-        TryFlushSend();
+        _sendChannel.Writer.TryWrite(data);
     }
 
-    private void TryFlushSend()
+    private async Task SendLoopAsync()
     {
-        // Only one fiber enters the send path at a time
-        if (Interlocked.CompareExchange(ref _isSending, 1, 0) != 0) return;
-
-        if (_sendQueue.TryDequeue(out var data))
+        try
         {
-            DoSend(data);
+            await foreach (var data in _sendChannel.Reader.ReadAllAsync())
+            {
+                if (!IsConnected) break;
+                try
+                {
+                    await _socket.SendAsync(data, SocketFlags.None);
+                }
+                catch
+                {
+                    Close();
+                    break;
+                }
+            }
         }
-        else
-        {
-            Interlocked.Exchange(ref _isSending, 0);
-            // Re-check to close the TOCTOU gap
-            if (!_sendQueue.IsEmpty) TryFlushSend();
-        }
-    }
-
-    private void DoSend(byte[] data)
-    {
-        _sendSAEA.SetBuffer(data, 0, data.Length);
-        if (!_socket.SendAsync(_sendSAEA))
-            ProcessSend(_sendSAEA);
-    }
-
-    private void OnSendCompleted(object? sender, SocketAsyncEventArgs e) => ProcessSend(e);
-
-    public void ProcessSend(SocketAsyncEventArgs e)
-    {
-        if (e.SocketError != SocketError.Success)
-        {
-            Interlocked.Exchange(ref _isSending, 0);
-            Close();
-            return;
-        }
-
-        if (_sendQueue.TryDequeue(out var next))
-        {
-            DoSend(next);
-        }
-        else
-        {
-            Interlocked.Exchange(ref _isSending, 0);
-            if (!_sendQueue.IsEmpty) TryFlushSend();
-        }
+        catch { /* channel completed or socket closed */ }
     }
 }

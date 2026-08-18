@@ -1,17 +1,25 @@
+using System.Collections;
+using TMPro;
 using UnityEngine;
 
 public class RemotePlayer : MonoBehaviour
 {
     [SerializeField] private float lerpSpeed = 10f;
 
+    [SerializeField] private TextMeshPro _label;
+
     private Vector3 _targetPosition;
     private bool _hasTarget;
+    private SpriteRenderer _sr;
+    private bool _isDead;
 
     public string Username { get; private set; }
+    public int PlayerId { get; private set; }
 
     private void Awake()
     {
         _targetPosition = transform.position;
+        _sr = GetComponent<SpriteRenderer>();
     }
 
     private void Update()
@@ -20,14 +28,50 @@ public class RemotePlayer : MonoBehaviour
             transform.position = Vector3.Lerp(transform.position, _targetPosition, lerpSpeed * Time.deltaTime);
     }
 
-    public void Setup(string username)
+    public void Setup(int playerId, string username)
     {
+        PlayerId = playerId;
         Username = username;
+
+        if (_label != null)
+            _label.text = playerId.ToString();
     }
 
     public void SetTargetPosition(float x, float y, float z)
     {
         _targetPosition = new Vector3(x, y, 0f);
         _hasTarget = true;
+    }
+
+    public void FlashDamage()
+    {
+        if (!_isDead) StartCoroutine(DamageFlash());
+    }
+
+    private IEnumerator DamageFlash()
+    {
+        if (_sr != null) _sr.color = Color.red;
+        yield return new WaitForSeconds(0.2f);
+        if (!_isDead && _sr != null) _sr.color = Color.white;
+    }
+
+    public void OnDeath()
+    {
+        _isDead = true;
+        StopAllCoroutines();
+        if (_sr != null) _sr.color = new Color(0.3f, 0.3f, 0.3f);
+    }
+
+    public void OnRespawn(float _, float __)
+    {
+        _isDead = false;
+        StartCoroutine(RespawnFlash());
+    }
+
+    private IEnumerator RespawnFlash()
+    {
+        if (_sr != null) _sr.color = Color.green;
+        yield return new WaitForSeconds(2.5f);
+        if (_sr != null) _sr.color = Color.white;
     }
 }

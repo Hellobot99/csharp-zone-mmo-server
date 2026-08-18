@@ -8,14 +8,17 @@ public sealed class MovePacketHandler : IPacketHandler
 {
     private readonly SessionManager _sessions;
     private readonly ZoneManager _zones;
+    private readonly MatchmakingManager _matchmaking;
 
-    private const float AttackRangeSq = 1.5f * 1.5f;  // 거리 1.5 이하면 공격
+    private const float AttackRangeSq = 12f * 12f;  // 거리 12 이하면 공격
     private const int AttackCooldownMs = 500;
+    private const float AoiRange = 150f;  // AOI 브로드캐스트 범위
 
-    public MovePacketHandler(SessionManager sessions, ZoneManager zones)
+    public MovePacketHandler(SessionManager sessions, ZoneManager zones, MatchmakingManager matchmaking)
     {
         _sessions = sessions;
         _zones = zones;
+        _matchmaking = matchmaking;
     }
 
     public Task HandleAsync(IClientSession session, byte[] body)
@@ -32,10 +35,10 @@ public sealed class MovePacketHandler : IPacketHandler
 
         var zone = _zones.GetOrCreate(ps.ZoneId);
 
-        // 이동 브로드캐스트
+        // 이동 브로드캐스트 (AOI: 300 유닛 이내에만)
         var movePacket = PacketHelper.Build(PacketType.MoveResponse,
             new MoveResponse { PlayerId = ps.PlayerId, X = request.X, Y = request.Y, Z = request.Z });
-        zone.Broadcast(movePacket, excludePlayerId: ps.PlayerId);
+        zone.BroadcastNearby(request.X, request.Y, AoiRange, movePacket, excludePlayerId: ps.PlayerId);
         session.Send(movePacket);
 
         // 전투 체크
@@ -45,6 +48,7 @@ public sealed class MovePacketHandler : IPacketHandler
             {
                 if (other.PlayerId == ps.PlayerId) continue;
                 if (other.IsDead) continue;
+                if (other.IsInvincible) continue;
 
                 float dx = ps.X - other.X;
                 float dy = ps.Y - other.Y;
@@ -61,7 +65,7 @@ public sealed class MovePacketHandler : IPacketHandler
         return Task.CompletedTask;
     }
 
-    private static void ApplyDamage(PlayerSession attacker, PlayerSession target, Zone zone)
+    private void ApplyDamage(PlayerSession attacker, PlayerSession target, Zone zone)
     {
         target.Hp -= attacker.Atk;
 
@@ -82,20 +86,23 @@ public sealed class MovePacketHandler : IPacketHandler
                 DeadPlayerId = target.PlayerId,
             });
 
-            // 3초 후 리스폰
-            _ = RespawnAsync(target, zone);
+            if (_matchmaking.IsArenaMatch(target.ZoneId))
+                _matchmaking.OnPlayerDied(target, attacker, target.ZoneId);
+            else
+                _ = RespawnAsync(target, zone);
         }
     }
 
-    private static async Task RespawnAsync(PlayerSession ps, Zone zone)
+    private async Task RespawnAsync(PlayerSession ps, Zone zone)
     {
         await Task.Delay(3000);
 
         ps.Hp = ps.MaxHp;
         ps.Atk = 10;
         ps.ColorIndex = 0;
-        ps.X = 0f;
-        ps.Y = 0f;
+        ps.IsInvincible = true;
+        ps.X = MatchmakingManager.LobbySpawn.X;
+        ps.Y = MatchmakingManager.LobbySpawn.Y;
 
         zone.Broadcast(PacketType.RespawnResponse, new RespawnResponse
         {
@@ -104,5 +111,8 @@ public sealed class MovePacketHandler : IPacketHandler
             Y = ps.Y,
             Hp = ps.Hp,
         });
+
+        await Task.Delay(3000);
+        ps.IsInvincible = false;
     }
 }

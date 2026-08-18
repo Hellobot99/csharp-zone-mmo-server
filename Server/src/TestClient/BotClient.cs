@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Text;
 using GameProto;
 using Google.Protobuf;
 
@@ -7,12 +9,15 @@ namespace TestClient;
 
 public class BotClient
 {
+    private static readonly SemaphoreSlim _authSemaphore = new(5, 5);
+
     // 3x3 그리드: Zone1 Zone2 Zone3 / Zone4 Zone5 Zone6 / Zone7 Zone8 Zone9
     private static readonly Dictionary<int, (float X1, float X2, float Y1, float Y2)> ZoneBounds = new()
     {
         [1] = (-140f, 140f, 460f, 740f), [2] = (160f, 440f, 460f, 740f), [3] = (460f, 740f, 460f, 740f),
         [4] = (-140f, 140f, 160f, 440f), [5] = (160f, 440f, 160f, 440f), [6] = (460f, 740f, 160f, 440f),
         [7] = (-140f, 140f,-140f, 140f), [8] = (160f, 440f,-140f, 140f), [9] = (460f, 740f,-140f, 140f),
+        [10] = (-1160f, -320f, -100f, 740f),
     };
     private static readonly Dictionary<int, (int R, int L, int U, int D)> Neighbors = new()
     {
@@ -26,6 +31,8 @@ public class BotClient
         [4] = (  0f, 300f), [5] = (300f, 300f), [6] = (600f, 300f),
         [7] = (  0f,   0f), [8] = (300f,   0f), [9] = (600f,   0f),
     };
+
+    private static readonly HttpClient Http = new();
 
     private readonly string _host;
     private readonly int _port;
@@ -47,6 +54,7 @@ public class BotClient
     public float X { get; private set; }
     public float Y { get; private set; }
     public bool Connected { get; private set; }
+    public bool IsDead { get; private set; }
 
     // 전송 카운터
     public long MoveRequestsSent { get; private set; }
@@ -56,21 +64,29 @@ public class BotClient
 
     // Move RTT
     private long _mvSum, _mvCount, _mvMin = long.MaxValue, _mvMax;
+    private readonly List<long> _mvSamples = new();
     public long MvAvg => _mvCount > 0 ? _mvSum / _mvCount : 0;
     public long MvMin => _mvCount > 0 ? _mvMin : 0;
     public long MvMax => _mvMax;
-
-    // ZoneTransfer RTT
-    private long _ztSum, _ztCount, _ztMin = long.MaxValue, _ztMax;
-    public long ZtAvg => _ztCount > 0 ? _ztSum / _ztCount : 0;
-    public long ZtMin => _ztCount > 0 ? _ztMin : 0;
-    public long ZtMax => _ztMax;
+    public long MvP95 { get {
+        long[] snap;
+        lock (_mvSamples) snap = _mvSamples.ToArray();
+        if (snap.Length == 0) return 0;
+        Array.Sort(snap);
+        return snap[(int)(snap.Length * 0.95)];
+    }}
 
     // Chat RTT
     private long _chatSum, _chatCount, _chatMin = long.MaxValue, _chatMax;
     public long ChatAvg => _chatCount > 0 ? _chatSum / _chatCount : 0;
     public long ChatMin => _chatCount > 0 ? _chatMin : 0;
     public long ChatMax => _chatMax;
+
+    // 매치 지표
+    public int MatchesPlayed { get; private set; }
+    public int Wins { get; private set; }
+    public int Deaths { get; private set; }
+    public bool AuthFailed { get; private set; }
 
     public BotClient(int botId, string host, int port)
     {
@@ -85,42 +101,40 @@ public class BotClient
     {
         try
         {
+            // HTTP 회원가입/로그인으로 JWT 획득 후 TCP 연결
+            await _authSemaphore.WaitAsync(ct);
+            try
+            {
+                await RegisterAsync(ct);  // 이미 있으면 서버가 무시
+            }
+            finally { _authSemaphore.Release(); }
+
             _client = new TcpClient();
             await _client.ConnectAsync(_host, _port, ct);
             _stream = _client.GetStream();
             Connected = true;
 
-            // 로그인 시도 → 실패하면 회원가입 후 재로그인
-            if (!await LoginAsync(ct))
+            // JWT를 TCP TcpAuthRequest로 인증 (Already logged in 대비 재시도)
+            bool authed = false;
+            for (int attempt = 0; attempt < 5; attempt++)
             {
-                await RegisterAsync(ct);
-                await LoginAsync(ct);
+                await _authSemaphore.WaitAsync(ct);
+                try { if (await LoginAsync(ct)) { authed = true; break; } }
+                finally { _authSemaphore.Release(); }
+                await Task.Delay(2000 * (attempt + 1), ct);
             }
-
-            // 랜덤 존으로 먼저 이동 (ZoneTransferResponse 올 때까지 직접 대기)
-            int startZone = _rng.Next(1, 10);
-            if (startZone != 1)
+            if (!authed)
             {
-                SendZoneTransfer(startZone);
-                while (true)
-                {
-                    var (type, body) = await ReadPacketAsync(ct);
-                    if (type == 0x0108)
-                    {
-                        var ztr = ZoneTransferResponse.Parser.ParseFrom(body);
-                        if (ztr.Success)
-                        {
-                            RecordZtRtt();
-                            ZoneTransferResponsesReceived++;
-                            ZoneId = ztr.ZoneId; X = ztr.SpawnX; Y = ztr.SpawnY;
-                        }
-                        break;
-                    }
-                }
+                AuthFailed = true;
+                Console.WriteLine($"[Bot{BotId}] Auth failed");
+                return;
             }
 
             Send(0x0103, Array.Empty<byte>()); // RequestSnapshot
             Send(0x0109, Array.Empty<byte>()); // EnterGame
+
+            // 랜덤 시간 후 매치메이킹 요청
+            _ = RequestMatchAfterDelayAsync(ct);
 
             var receiveTask = ReceiveLoopAsync(ct);
             await MoveLoopAsync(ct);
@@ -135,22 +149,43 @@ public class BotClient
 
     private async Task<bool> LoginAsync(CancellationToken ct)
     {
-        Send(0x0001, new LoginRequest { Username = _username, Password = _password }.ToByteArray());
+        var res = await Http.PostAsJsonAsync(
+            $"http://{_host}:8080/api/auth/login",
+            new { username = _username, password = _password }, ct);
+        if (!res.IsSuccessStatusCode) return false;
+
+        var json = await res.Content.ReadFromJsonAsync<HttpLoginResponse>(ct);
+        if (json is null || string.IsNullOrEmpty(json.Token)) return false;
+
+        // JWT를 TCP TcpAuthRequest로 전달
+        Send(0x0001, Encoding.UTF8.GetBytes(json.Token));
         var (type, body) = await ReadPacketAsync(ct);
         if (type != 0x0002) return false;
         var resp = LoginResponse.Parser.ParseFrom(body);
         if (!resp.Success) return false;
+
         PlayerId = resp.PlayerId;
-        var spawn = SpawnPoints[ZoneId];
-        X = spawn.X; Y = spawn.Y;
+        ZoneId = 10;
+        X = -740f; Y = 320f;
         return true;
     }
 
     private async Task RegisterAsync(CancellationToken ct)
     {
-        Send(0x0003, new RegisterRequest { Username = _username, Password = _password }.ToByteArray());
-        await ReadPacketAsync(ct);
+        await Http.PostAsJsonAsync(
+            $"http://{_host}:8080/api/auth/register",
+            new { username = _username, password = _password }, ct);
     }
+
+    private async Task RequestMatchAfterDelayAsync(CancellationToken ct)
+    {
+        int delay = _rng.Next(10000, 30000);
+        await Task.Delay(delay, ct);
+        if (!ct.IsCancellationRequested)
+            Send(0x0401, Array.Empty<byte>());
+    }
+
+    private record HttpLoginResponse(string Token, int PlayerId, string Username);
 
     // ── 이동 루프 ────────────────────────────────────────────────────────────
 
@@ -165,17 +200,17 @@ public class BotClient
         {
             await Task.Delay(moveInterval, ct);
 
+            if (IsDead) continue;
+
             X += vx * 0.1f;
             Y += vy * 0.1f;
 
-            if (ZoneBounds.TryGetValue(ZoneId, out var b) && Neighbors.TryGetValue(ZoneId, out var nb))
+            if (ZoneBounds.TryGetValue(ZoneId, out var b))
             {
-                int target = -1;
-                if      (X > b.X2) target = nb.R;
-                else if (X < b.X1) target = nb.L;
-                else if (Y > b.Y2) target = nb.U;
-                else if (Y < b.Y1) target = nb.D;
-                if (target != -1) { SendZoneTransfer(target); continue; }
+                if      (X > b.X2) { X = b.X2; vx = -Math.Abs(vx); }
+                else if (X < b.X1) { X = b.X1; vx =  Math.Abs(vx); }
+                if      (Y > b.Y2) { Y = b.Y2; vy = -Math.Abs(vy); }
+                else if (Y < b.Y1) { Y = b.Y1; vy =  Math.Abs(vy); }
             }
 
             if (_rng.NextDouble() < 0.05) vx = RandomVelocity();
@@ -208,14 +243,6 @@ public class BotClient
         Send(0x0107, new ZoneTransferRequest { TargetZoneId = targetZoneId }.ToByteArray());
     }
 
-    private void RecordZtRtt()
-    {
-        if (_ztSentAt == 0) return;
-        long rtt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _ztSentAt;
-        _ztSum += rtt; _ztCount++;
-        if (rtt < _ztMin) _ztMin = rtt;
-        if (rtt > _ztMax) _ztMax = rtt;
-    }
 
     // ── 수신 루프 ────────────────────────────────────────────────────────────
 
@@ -233,21 +260,54 @@ public class BotClient
                     {
                         long rtt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - mvSentAt;
                         _mvSum += rtt; _mvCount++;
+                        lock (_mvSamples) _mvSamples.Add(rtt);
                         if (rtt < _mvMin) _mvMin = rtt;
                         if (rtt > _mvMax) _mvMax = rtt;
                     }
+                    break;
+
+                case 0x0003: // SpawnResponse
+                    var sr = SpawnResponse.Parser.ParseFrom(body);
+                    ZoneId = sr.ZoneId; X = sr.X; Y = sr.Y;
                     break;
 
                 case 0x0108: // ZoneTransferResponse
                     var ztr = ZoneTransferResponse.Parser.ParseFrom(body);
                     if (ztr.Success)
                     {
-                        RecordZtRtt();
-                        ZoneTransferResponsesReceived++;
                         ZoneId = ztr.ZoneId;
                         X = ztr.SpawnX;
                         Y = ztr.SpawnY;
+                        IsDead = false;
                         Send(0x0103, Array.Empty<byte>());
+                    }
+                    break;
+
+                case 0x0404: // MatchStarted
+                    var ms = MatchStarted.Parser.ParseFrom(body);
+                    ZoneId = ms.ZoneId;
+                    X = ms.SpawnX; Y = ms.SpawnY;
+                    IsDead = false;
+                    MatchesPlayed++;
+                    break;
+
+                case 0x0406: // MatchEnded
+                    var me = MatchEnded.Parser.ParseFrom(body);
+                    if (me.WinnerId == PlayerId) Wins++;
+                    _ = RequestMatchAfterDelayAsync(ct);
+                    break;
+
+                case 0x0306: // DeathResponse
+                    var dr = DeathResponse.Parser.ParseFrom(body);
+                    if (dr.DeadPlayerId == PlayerId) { IsDead = true; Deaths++; }
+                    break;
+
+                case 0x0308: // RespawnResponse
+                    var rr = RespawnResponse.Parser.ParseFrom(body);
+                    if (rr.PlayerId == PlayerId)
+                    {
+                        IsDead = false;
+                        X = rr.X; Y = rr.Y;
                     }
                     break;
 

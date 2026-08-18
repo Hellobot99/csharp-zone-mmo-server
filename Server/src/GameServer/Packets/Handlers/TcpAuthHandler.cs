@@ -61,17 +61,18 @@ public sealed class TcpAuthHandler : IPacketHandler
         var playerId = int.Parse(jwt.Claims.First(c => c.Type == JwtRegisteredClaimNames.Sub).Value);
         var username = jwt.Claims.First(c => c.Type == JwtRegisteredClaimNames.UniqueName).Value;
 
-        if (_sessions.GetByPlayerId(playerId) is not null)
+        var existing = _sessions.GetByPlayerId(playerId);
+        if (existing is not null)
         {
-            session.Send(PacketType.TcpAuthResponse, new LoginResponse { Success = false, Token = "Already logged in" });
-            return Task.CompletedTask;
+            _logger.LogInformation("[session={Id}] Player '{User}' reconnected – closing old session.", session.SessionId, username);
+            existing.Connection.Close();
         }
 
         var ps = _sessions.Add(session, playerId, username);
         ps.IsObserver = username.StartsWith('~');
-        ps.X = 0f;
-        ps.Y = 600f;
-        _zones.Enter(ps, zoneId: 1);
+        ps.X = MatchmakingManager.LobbySpawn.X;
+        ps.Y = MatchmakingManager.LobbySpawn.Y;
+        _zones.Enter(ps, zoneId: MatchmakingManager.LobbyZoneId);
 
         _logger.LogInformation("[session={Id}] Player '{User}' (id={PlayerId}) authenticated via JWT.", session.SessionId, username, playerId);
         session.Send(PacketType.TcpAuthResponse, new LoginResponse { Success = true, PlayerId = playerId, Token = token });

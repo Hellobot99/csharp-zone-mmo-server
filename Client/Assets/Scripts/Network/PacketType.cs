@@ -5,6 +5,7 @@ public static class PacketType
     // After receiving a JWT, the client connects via TCP and sends TcpAuthRequest.
     public const ushort TcpAuthRequest  = 0x0001;
     public const ushort TcpAuthResponse = 0x0002;
+    public const ushort SpawnResponse   = 0x0003;
 
     // Heartbeat
     public const ushort Ping = 0x0011;
@@ -22,4 +23,17 @@ public static class PacketType
     public const ushort EnterGame           = 0x0109;
     public const ushort ChatRequest         = 0x0201;
     public const ushort ChatBroadcast       = 0x0202;
+
+    // Combat
+    public const ushort SkillRequest    = 0x0301;
+    public const ushort SkillResponse   = 0x0302;
+    public const ushort DamageResponse  = 0x0304;
+    public const ushort DeathResponse   = 0x0306;
+    public const ushort RespawnResponse = 0x0308;
+
+    // Matchmaking
+    public const ushort MatchmakeRequest  = 0x0401;
+    public const ushort MatchmakeResponse = 0x0402;
+    public const ushort MatchStarted      = 0x0404;
+    public const ushort MatchEnded        = 0x0406;
 }

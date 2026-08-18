@@ -11,17 +11,22 @@ public class PlayerManager : MonoBehaviour
 
     private void Start()
     {
-        NetworkManager.Instance.Dispatcher.Register(PacketType.ZoneSnapshot,        OnZoneSnapshot);
-        NetworkManager.Instance.Dispatcher.Register(PacketType.PlayerEnter,         OnPlayerEnter);
-        NetworkManager.Instance.Dispatcher.Register(PacketType.PlayerLeave,         OnPlayerLeave);
-        NetworkManager.Instance.Dispatcher.Register(PacketType.MoveResponse,        OnMoveResponse);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.ZoneSnapshot,         OnZoneSnapshot);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.PlayerEnter,          OnPlayerEnter);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.PlayerLeave,          OnPlayerLeave);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.MoveResponse,         OnMoveResponse);
         NetworkManager.Instance.Dispatcher.Register(PacketType.ZoneTransferResponse, OnZoneTransfer);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.DamageResponse,       OnDamageResponse);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.DeathResponse,        OnDeathResponse);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.RespawnResponse,      OnRespawnResponse);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.MatchStarted,         OnMatchStarted);
+        NetworkManager.Instance.Dispatcher.Register(PacketType.MatchEnded,           OnMatchEnded);
 
         // GameScene 로드 후 핸들러가 준비된 시점에 스냅샷 요청 + 게임 입장 알림
         NetworkManager.Instance.Send(PacketType.RequestSnapshot, Array.Empty<byte>());
         if (!GameManager.ObserverMode)
             NetworkManager.Instance.Send(PacketType.EnterGame, Array.Empty<byte>());
-        ZoneUI.Instance?.SetZone(1);
+        ZoneUI.Instance?.SetZone(10);
     }
 
     // ── 핸들러 ──────────────────────────────────────────────────────────────────
@@ -82,6 +87,60 @@ public class PlayerManager : MonoBehaviour
         NetworkManager.Instance.Send(PacketType.RequestSnapshot, Array.Empty<byte>());
     }
 
+    private void OnDamageResponse(byte[] body)
+    {
+        var resp = GameProto.DamageResponse.Parser.ParseFrom(body);
+        if (!GameManager.ObserverMode && resp.TargetId == LoginHandler.PlayerId)
+        {
+            FindFirstObjectByType<LocalPlayer>()?.FlashDamage();
+            return;
+        }
+        if (_remotePlayers.TryGetValue(resp.TargetId, out var player))
+            player.FlashDamage();
+    }
+
+    private void OnDeathResponse(byte[] body)
+    {
+        var resp = GameProto.DeathResponse.Parser.ParseFrom(body);
+        if (!GameManager.ObserverMode && resp.DeadPlayerId == LoginHandler.PlayerId)
+        {
+            FindFirstObjectByType<LocalPlayer>()?.OnDeath();
+            return;
+        }
+        if (_remotePlayers.TryGetValue(resp.DeadPlayerId, out var player))
+            player.OnDeath();
+    }
+
+    private void OnRespawnResponse(byte[] body)
+    {
+        var resp = GameProto.RespawnResponse.Parser.ParseFrom(body);
+        if (!GameManager.ObserverMode && resp.PlayerId == LoginHandler.PlayerId)
+        {
+            FindFirstObjectByType<LocalPlayer>()?.OnRespawn(resp.X, resp.Y);
+            return;
+        }
+        if (_remotePlayers.TryGetValue(resp.PlayerId, out var player))
+            player.OnRespawn(resp.X, resp.Y);
+    }
+
+    private void OnMatchStarted(byte[] body)
+    {
+        var resp = GameProto.MatchStarted.Parser.ParseFrom(body);
+
+        foreach (var p in _remotePlayers.Values)
+            Destroy(p.gameObject);
+        _remotePlayers.Clear();
+
+        ZoneUI.Instance?.SetZone(resp.ZoneId);
+        NetworkManager.Instance.Send(PacketType.RequestSnapshot, Array.Empty<byte>());
+    }
+
+    private void OnMatchEnded(byte[] body)
+    {
+        // ZoneTransferResponse로 로비 이동이 오므로 별도 처리 불필요
+        // 필요 시 UI 표시 추가
+    }
+
     // ── 헬퍼 ────────────────────────────────────────────────────────────────────
 
     private void SpawnRemotePlayer(int playerId, string username, float x, float y)
@@ -96,7 +155,7 @@ public class PlayerManager : MonoBehaviour
         if (localPlayer != null) Destroy(localPlayer);
 
         var player = go.GetComponent<RemotePlayer>() ?? go.AddComponent<RemotePlayer>();
-        player.Setup(username);
+        player.Setup(playerId, username);
         _remotePlayers[playerId] = player;
     }
 
