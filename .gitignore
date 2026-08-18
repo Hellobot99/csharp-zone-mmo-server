@@ -92,4 +92,6 @@ Server/**/*.user
 # Mono
 mono_crash.*
 
-Server/docs/
+# 블로그용 초안(00~11)은 비공개 유지, 부하테스트 실측 기록(performance.md)만 공개
+Server/docs/*
+!Server/docs/performance.md
