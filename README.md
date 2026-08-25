@@ -2,8 +2,8 @@
 
 C#/.NET 8로 만든 존(Zone) 방식 MMO 서버입니다. `SocketAsyncEventArgs`(Windows에서는
 IOCP로 동작) 기반 TCP 실시간 게임 서버와, JWT 인증을 처리하는 ASP.NET Core HTTP API를
-같은 프로세스에서 호스팅 서비스로 함께 띄웁니다. 로비에서 대기열에 들어가면 4인
-매칭 → 아레나 존에서 최후의 1인을 가리는 PvP → 결과에 따라 다시 로비, 흐름을 갖춘
+같은 프로세스에서 호스팅 서비스로 함께 띄웁니다. 로비에서 대기열에 들어가면 4인이
+매칭돼 아레나 존에서 최후의 1인을 가리는 PvP를 하고, 끝나면 다시 로비로 돌아오는
 실시간 전투 MMO입니다.
 
 ## 왜 이 프로젝트인가
@@ -49,7 +49,7 @@ TcpAuthHandler(TCP, 7000)   : 접속 직후 JWT를 검증해 세션을 인증 �
 - 이동 중 공격 판정(사거리 내 상대 자동 공격, 쿨다운 있음), 데미지 적용, 체력 0 시
   사망 처리
 - 스폰/리스폰 직후 3초 무적 시간
-- 최후의 1인이 남으면 승리 처리 → 3초 뒤 전원 로비로 복귀 → 즉시 다음 매칭 시도
+- 최후의 1인이 남으면 승리 처리하고, 3초 뒤 전원 로비로 복귀시킨 다음 바로 다음 매칭을 시도
 - 매치가 30초 안에 안 끝나면 강제 종료(타임아웃)
 - 매치 중 플레이어가 접속을 끊으면 남은 인원 기준으로 승패를 재계산
 
@@ -67,9 +67,10 @@ TcpAuthHandler(TCP, 7000)   : 접속 직후 JWT를 검증해 세션을 인증 �
 - `proto/auth.proto`, `proto/game.proto` — Protocol Buffers로 정의.
 - 와이어 포맷: `[size(2B)][type(2B)][protobuf body]` — C++ IOCP 프로젝트와 동일하게
   헤더+바디 구조를 직접 파싱한다 (자체 프레이밍, 프레임워크 의존 없음).
-- 흐름: `POST /api/auth/register` → `POST /api/auth/login`(JWT 발급) → TCP 접속 →
-  `TcpAuthRequest`(JWT 원문 전송)로 세션 인증 → 로비에서 매칭 요청 →
-  `MatchStarted` 수신 시 아레나로 이동 → 이동/공격/`MatchEnded`.
+- 흐름: `POST /api/auth/register`로 가입하고 `POST /api/auth/login`으로 JWT를 발급받는다.
+  그 JWT를 들고 TCP로 접속해서 `TcpAuthRequest`(원문 전송)로 세션을 인증한 뒤, 로비에서
+  매칭을 요청하고 `MatchStarted`를 받으면 아레나로 이동해 이동/공격을 주고받다가
+  `MatchEnded`로 끝난다.
 
 ## 빌드 및 실행
 ```bash
