@@ -1,6 +1,6 @@
 using TestClient;
 
-const string Host = "4.230.20.98";
+const string Host = "127.0.0.1";
 const int Port = 7000;
 const int Duration = 120; // 초
 int BotCount = args.Length > 0 && int.TryParse(args[0], out var n) ? n : 100;
